@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: darwin_arm64
+          - os: macos-15-intel
+            platform: darwin_amd64
+          - os: ubuntu-latest
+            platform: linux_amd64
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # `lt --version` comes from Cargo.toml: a tag that disagrees with it
+      # would ship binaries reporting the wrong version.
+      - name: Check the tag matches the crate version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${version}" >&2
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Lance's build scripts compile protobuf definitions.
+      - name: Install protoc (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform }}
+
+      - name: Build
+        run: cargo build --release --locked -p lancet-cli -p lancet-server
+
+      # Two assets: install.sh (and later `lt update`) look for
+      # lancet_<platform>.tar.gz; the HTTP server ships alongside.
+      - name: Package
+        run: |
+          tar -C target/release -czf lancet_${{ matrix.platform }}.tar.gz lt
+          tar -C target/release -czf lancet-server_${{ matrix.platform }}.tar.gz lt-server
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            lancet_${{ matrix.platform }}.tar.gz
+            lancet-server_${{ matrix.platform }}.tar.gz
