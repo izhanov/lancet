@@ -1,0 +1,147 @@
+//! Subcommands, the global flags they share and terminal output helpers.
+
+pub mod eval;
+pub mod index;
+pub mod search;
+
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use clap::{ArgAction, ValueEnum};
+use lancet_lib::config;
+use lancet_lib::embed::{Embedder, Fake, Ollama};
+use lancet_lib::store::{OpenOptions, Store};
+
+/// Flags accepted by every command, each with a `LANCET_*` env twin.
+#[derive(clap::Args)]
+pub struct Global {
+    /// Debug logging: per-file timings, retries
+    #[arg(long, global = true)]
+    pub verbose: bool,
+    /// Errors and the final summary only
+    #[arg(long, global = true)]
+    pub quiet: bool,
+    /// Storage backend
+    #[arg(long, global = true, env = "LANCET_STORE", value_enum, default_value_t = StoreKind::Lance)]
+    pub store: StoreKind,
+    /// Path to the database
+    #[arg(long, global = true, env = "LANCET_DB", default_value_os_t = config::default_db_path())]
+    pub db: PathBuf,
+    /// Embedding backend
+    #[arg(long, global = true, env = "LANCET_EMBEDDER", value_enum, default_value_t = EmbedderKind::Ollama)]
+    pub embedder: EmbedderKind,
+    /// Ollama server URL
+    #[arg(
+        long,
+        global = true,
+        env = "LANCET_OLLAMA_URL",
+        default_value = "http://localhost:11434"
+    )]
+    pub ollama_url: String,
+    /// Ollama embedding model
+    #[arg(
+        long,
+        global = true,
+        env = "LANCET_EMBED_MODEL",
+        default_value = "bge-m3"
+    )]
+    pub embed_model: String,
+    /// Directory with golden-set files for `lt eval`
+    #[arg(long, global = true, env = "LANCET_EVALS", default_value_os_t = config::default_evals_dir())]
+    pub evals: PathBuf,
+    /// Re-open the table on every read to see writes from other processes
+    #[arg(long, global = true, env = "LANCET_FRESH_READS", default_value_t = true, action = ArgAction::Set)]
+    pub fresh_reads: bool,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum StoreKind {
+    Lance,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum EmbedderKind {
+    Ollama,
+    /// Deterministic vectors without a model: for tests and dry runs
+    Fake,
+}
+
+impl Global {
+    pub async fn open_store(&self) -> anyhow::Result<Store> {
+        let StoreKind::Lance = self.store;
+        let uri = self
+            .db
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("database path is not UTF-8: {}", self.db.display()))?;
+        Ok(Store::open_with(
+            uri,
+            OpenOptions {
+                fresh_reads: self.fresh_reads,
+            },
+        )
+        .await?)
+    }
+
+    pub fn embedder(&self) -> Arc<dyn Embedder> {
+        match self.embedder {
+            EmbedderKind::Ollama => Arc::new(Ollama::new(&self.ollama_url, &self.embed_model)),
+            EmbedderKind::Fake => Arc::new(Fake { dim: 32 }),
+        }
+    }
+}
+
+/// Diagnostics go to stderr; stdout stays clean for the actual output
+/// (search results, progress lines), so piping keeps working.
+pub fn setup_logging(g: &Global) {
+    let level = match (g.quiet, g.verbose) {
+        (true, _) => "error", // --quiet wins over --verbose
+        (_, true) => "debug",
+        _ => "info",
+    };
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| format!("warn,lancet_lib={level},lancet_cli={level}").into());
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(filter)
+        .with_target(false)
+        .init();
+}
+
+pub fn colors_enabled() -> bool {
+    std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal()
+}
+
+pub fn paint(enabled: bool, code: &str, s: &str) -> String {
+    if enabled {
+        format!("\x1b[{code}m{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
+/// A stored path made easier to read: relative to the current directory
+/// when inside it, otherwise with the home directory as `~`.
+pub fn pretty_path(path: &str) -> String {
+    let p = Path::new(path);
+    if let Ok(cwd) = std::env::current_dir()
+        && let Ok(rel) = p.strip_prefix(&cwd)
+    {
+        return rel.display().to_string();
+    }
+    if let Some(home) = std::env::home_dir()
+        && let Ok(rest) = p.strip_prefix(&home)
+    {
+        return Path::new("~").join(rest).display().to_string();
+    }
+    path.to_string()
+}
+
+/// Text flattened to a single line of at most `max` characters.
+pub fn snippet(text: &str, max: usize) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= max {
+        return flat;
+    }
+    flat.chars().take(max).collect::<String>() + "…"
+}

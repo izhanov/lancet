@@ -1,6 +1,9 @@
 //! Lancet core: parsing, embedding, indexing and hybrid search over LanceDB.
 
+pub mod config;
 pub mod embed;
+pub mod eval;
+pub mod index;
 pub mod parse;
 pub mod search;
 pub mod store;
@@ -19,6 +22,14 @@ pub enum Error {
     #[error("unexpected table layout: {0}")]
     Schema(String),
 
+    #[error("parse {path}: {message}")]
+    Parse { path: String, message: String },
+    #[error("pdftotext not found — install Poppler (brew install poppler)")]
+    PdfToolMissing,
+    #[error("no supported files found in {0}")]
+    NoFiles(String),
+    #[error("{path}: {message}")]
+    Golden { path: String, message: String },
 
     #[error("ollama at {url}: {source} (is `ollama serve` running?)")]
     OllamaUnreachable { url: String, source: reqwest::Error },
@@ -33,7 +44,9 @@ pub enum Error {
     ChunksVectorsMismatch { chunks: usize, vectors: usize },
     #[error("vector dimension mismatch: table has {table}, got {got}")]
     DimensionMismatch { table: usize, got: usize },
-    #[error("database is indexed with embedder {stored:?}, current is {current:?}")]
+    #[error(
+        "database is indexed with embedder {stored:?}, current is {current:?}; run `lt reindex <path>` to rebuild"
+    )]
     EmbedderMismatch { stored: String, current: String },
     #[error("database is empty; run `lt index <path>` first")]
     EmptyDatabase,
