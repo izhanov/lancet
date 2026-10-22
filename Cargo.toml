@@ -3,9 +3,14 @@ members = ["lib", "cli", "server"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
+
+# Drops symbols: lt shrinks from ~240 to ~200 MB; the rest is lance,
+# datafusion and arrow code.
+[profile.release]
+strip = true
 
 [workspace.dependencies]
 lancet-lib = { path = "lib" }
