@@ -1,0 +1,16 @@
+[package]
+name = "lancet-cli"
+description = "Lancet command line: local semantic search over your files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lt"
+path = "src/main.rs"
+
+[dependencies]
+lancet-lib.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true

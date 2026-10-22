@@ -1,0 +1,15 @@
+[package]
+name = "lancet-server"
+description = "Lancet HTTP server: per-tenant indexing and search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lt-server"
+path = "src/main.rs"
+
+[dependencies]
+lancet-lib.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
