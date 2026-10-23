@@ -50,6 +50,13 @@ Next, in order:
    the `lancet-search` skill should learn about extra `lancet-*` indexes.
 3. A golden set for code (15–20 real questions about uscreen_2): does
    semantic search beat an agent with grep? Decides how far code goes.
+   It also settles the 600-byte packs for code between definitions, tried
+   on routes.rb only ("cancel membership route in storefront account":
+   vector rank 36 → 7, hybrid 8 → 2). Vocabulary gaps ("cancel
+   subscription" for `cancel_membership`) stay: chunking cannot close them.
+   And a chunker version in `meta`: indexing is incremental by mtime, so a
+   new chunking in a new `lt` never reaches unchanged files — warn and
+   suggest `lt index --force` when the stored version differs.
 4. Images, in two steps. First text from the image, so it lands in the
    same `chunks` table and the same results as notes: OCR (macOS Vision or
    Tesseract) always, captions from a local vision model (Ollama) as an
