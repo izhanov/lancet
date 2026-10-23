@@ -48,8 +48,11 @@ Next, in order:
    semantic search beat an agent with grep? Decides how far code goes.
 4. Images: OCR text, captions from a vision model, or multimodal
    embeddings — to be decided.
-5. Embedding throughput: `OLLAMA_NUM_PARALLEL` and batch size (benchmark),
-   several Ollama URLs for remote GPUs.
+5. Embedding throughput. Measured on the M5 with `bge-m3` (2026-10-23):
+   61–64 texts/s whatever `OLLAMA_NUM_PARALLEL` (1/4/8), request
+   concurrency (1/4/8) or batch size (16/32/64) — the GPU is saturated by
+   one request, so local tuning gives nothing. What is left: fewer chunks,
+   a lighter model (only by eval), several Ollama URLs for remote GPUs.
 6. The rest of the CLI: `list`, `flush`, `evals`, `setup`, `update`.
 7. `lt-server` and tenant databases on S3.
 
