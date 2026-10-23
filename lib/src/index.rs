@@ -183,26 +183,39 @@ impl Indexer {
     }
 
     /// Files under `roots` that have a registered parser. Hidden directories
-    /// such as .git are skipped unless given as a root themselves.
-    /// Overlapping roots (`notes/` and `notes/a.md`) are deduplicated, so
-    /// every file is indexed at most once.
+    /// such as .git are skipped unless given as a root themselves. Inside a
+    /// git repository `.gitignore` is honored (vendored gems, node_modules,
+    /// build output), anywhere an `.ignore` file is. Overlapping roots
+    /// (`notes/` and `notes/a.md`) are deduplicated, so every file is
+    /// indexed at most once.
     pub fn collect_files(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         let mut seen = HashSet::new();
         for root in roots {
-            let walk = walkdir::WalkDir::new(root)
-                .sort_by_file_name()
-                .into_iter()
+            // The walker reports a missing root as just another entry error.
+            std::fs::metadata(root).map_err(|e| Error::Io {
+                path: root.display().to_string(),
+                source: e,
+            })?;
+            let walk = ignore::WalkBuilder::new(root)
+                .hidden(false)
+                .sort_by_file_name(|a, b| a.cmp(b))
                 .filter_entry(|e| {
                     e.depth() == 0
-                        || !(e.file_type().is_dir()
+                        || !(e.file_type().is_some_and(|t| t.is_dir())
                             && e.file_name().to_string_lossy().starts_with('.'))
-                });
+                })
+                .build();
             for entry in walk {
-                let entry = entry.map_err(|e| Error::Io {
-                    path: e.path().unwrap_or(root).display().to_string(),
-                    source: std::io::Error::other(e.to_string()),
-                })?;
+                // An unreadable directory or a broken ignore file costs
+                // only what it covers, not the whole run.
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "skipped while collecting files");
+                        continue;
+                    }
+                };
                 let path = entry.into_path();
                 if self.parsers.for_path(&path).is_some()
                     && !path.is_dir()

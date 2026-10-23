@@ -9,6 +9,7 @@ license.workspace = true
 async-trait.workspace = true
 csv.workspace = true
 futures.workspace = true
+ignore.workspace = true
 lancedb.workspace = true
 quick-xml.workspace = true
 regex.workspace = true
@@ -19,7 +20,6 @@ serde_norway.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-walkdir.workspace = true
 zip.workspace = true
 
 [dev-dependencies]

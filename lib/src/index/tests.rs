@@ -253,6 +253,37 @@ fn collect_files_accepts_hidden_root_and_dedups_overlaps() {
 }
 
 #[test]
+fn collect_files_honors_gitignore_inside_a_repo_and_ignore_files_anywhere() {
+    let dir = tempfile::tempdir().unwrap();
+    let write = |rel: &str, content: &str| {
+        let path = dir.path().join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    };
+    write("repo/.git/HEAD", "ref: refs/heads/main\n");
+    write("repo/.gitignore", "/vendor\n");
+    write("repo/app.md", "x");
+    write("repo/vendor/gem.md", "x");
+    write("notes/.gitignore", "drafts/\n"); // not a repo: .gitignore is inert
+    write("notes/.ignore", "private/\n");
+    write("notes/drafts/a.md", "x");
+    write("notes/private/b.md", "x");
+    let indexer = Indexer::new(Registry::with_defaults(), Arc::new(Fake { dim: 8 }));
+
+    let files = indexer
+        .collect_files(&[dir.path().join("repo"), dir.path().join("notes")])
+        .unwrap();
+
+    assert_eq!(
+        files,
+        [
+            dir.path().join("repo/app.md"),
+            dir.path().join("notes/drafts/a.md")
+        ]
+    );
+}
+
+#[test]
 fn collect_files_missing_root_is_an_error() {
     let indexer = Indexer::new(Registry::with_defaults(), Arc::new(Fake { dim: 8 }));
     assert!(
