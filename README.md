@@ -70,6 +70,48 @@ lt lang list
 lt index ~/code/my-app
 ```
 
+### Indexing a repository
+
+Keep code in a database of its own (`--db` / `LANCET_DB`): tens of thousands
+of code chunks would crowd your notes out of search results, and a code
+index may want a different embedding model.
+
+```sh
+lt lang add ruby --ext .rake --ext .gemspec
+cd ~/code/my-app
+lt --db ~/.local/share/lancet/my-app.lance index app lib
+lt --db ~/.local/share/lancet/my-app.lance search "where is the invoice total computed"
+```
+
+Index the directories you ask questions about, not the whole repository:
+
+- **Skip what nobody searches by meaning.** Database migrations, generated
+  code, fixtures and vendored libraries are noise in the results and cost
+  embedding time. In a Rails app, `app` and `lib` are about half the Ruby
+  files; `db/migrate` and `spec` are the other half.
+- **Tests are a judgment call.** Specs answer "how is this used", but they
+  repeat the code they test and dilute the results; add them later as a
+  separate root if you miss them.
+- **What git ignores is skipped already** (`vendor/bundle`, `node_modules`,
+  build output). To leave out more without listing roots, put an `.ignore`
+  file (gitignore syntax) in the directory you index, e.g. `db/migrate/`.
+- **The first run is the slow one**: every chunk goes through the embedding
+  model, roughly 40–50 chunks per second with `bge-m3` on an Apple M5, so a
+  large app takes minutes. After that `lt index` re-embeds only files whose
+  mtime changed — a `git pull` costs seconds.
+- **Changing roots? Use `reindex`.** `lt index` drops vanished files only
+  under the roots it was given, so files indexed earlier from another root
+  stay; `lt reindex <roots>` starts the database over.
+
+To let agents search the code, register a second MCP server pointed at the
+code database next to the one for notes:
+
+```sh
+claude mcp add -s user lancet-my-app -- "$(command -v lt)" --db ~/.local/share/lancet/my-app.lance mcp
+```
+
+### Language plugins
+
 A plugin is a directory in `~/.local/share/lancet/languages`
 (`--languages` / `LANCET_LANGUAGES`) with three files: `language.toml`
 (the grammar's name and file extensions), `grammar.wasm` (the grammar
