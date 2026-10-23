@@ -162,7 +162,10 @@ impl Indexer {
 
         let texts: Vec<String> = chunks.iter().map(|c| embedding_text(&key, c)).collect();
         let t = Instant::now();
-        let mut vectors = self.embedder.embed(&texts).await?;
+        let mut vectors = self
+            .embedder
+            .embed(&texts, embed::InputType::Document)
+            .await?;
         embed::normalize(&mut vectors);
         tracing::debug!(file = %key, vectors = vectors.len(), took = ?t.elapsed(), "embedded");
 

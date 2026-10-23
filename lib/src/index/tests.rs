@@ -2,6 +2,7 @@ use std::fs;
 
 use super::*;
 use crate::embed::Fake;
+use crate::embed::recording::Recording;
 
 struct Fixture {
     dir: tempfile::TempDir,
@@ -301,4 +302,20 @@ fn embedding_text_weaves_in_path_and_section() {
     ] {
         assert_eq!(embedding_text(path, &c), want, "{path}");
     }
+}
+
+#[tokio::test]
+async fn embeds_chunks_as_documents() {
+    let f = Fixture::new().await;
+    f.write("a.md", "# A\n\nalpha\n");
+    f.write("b.md", "# B\n\nbeta\n");
+    let embedder = Arc::new(Recording::new(8));
+    let indexer = Indexer::new(Registry::with_defaults(), embedder.clone());
+
+    indexer
+        .run(&f.store, &[f.notes()], &Options::default())
+        .await
+        .unwrap();
+
+    assert_eq!(embedder.inputs(), [embed::InputType::Document; 2]);
 }

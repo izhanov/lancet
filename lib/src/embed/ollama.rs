@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::Embedder;
+use super::{Embedder, InputType};
 use crate::{Error, Result};
 
 /// Embeds texts via a local Ollama server (POST /api/embed).
@@ -133,8 +133,9 @@ fn retryable(err: &Error) -> bool {
 impl Embedder for Ollama {
     /// Slices texts into batches: a whole book in one request kills Ollama's
     /// runner, and a failed retry then re-sends only the batch that broke,
-    /// not everything before it.
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+    /// not everything before it. `/api/embed` has no notion of [`InputType`], and
+    /// bge-m3 embeds queries and passages alike, so the input type is not used.
+    async fn embed(&self, texts: &[String], _input: InputType) -> Result<Vec<Vec<f32>>> {
         let mut vectors = Vec::with_capacity(texts.len());
         for batch in texts.chunks(self.batch) {
             vectors.extend(self.embed_batch(batch).await?);

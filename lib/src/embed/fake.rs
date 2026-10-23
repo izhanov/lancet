@@ -1,18 +1,19 @@
 use std::hash::Hasher;
 
-use super::Embedder;
+use super::{Embedder, InputType};
 use crate::Result;
 
 /// Produces deterministic pseudo-random vectors derived from the text hash.
 /// Search over them is meaningless, but the vectors are valid, so the whole
-/// indexing pipeline can run and be tested without a real model.
+/// indexing pipeline can run and be tested without a real model. The input type
+/// is ignored: searching for a chunk's exact text finds that chunk.
 pub struct Fake {
     pub dim: usize,
 }
 
 #[async_trait::async_trait]
 impl Embedder for Fake {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+    async fn embed(&self, texts: &[String], _input: InputType) -> Result<Vec<Vec<f32>>> {
         Ok(texts.iter().map(|text| self.vector(text)).collect())
     }
 

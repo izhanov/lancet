@@ -39,7 +39,10 @@ async fn embed() {
     })
     .await;
 
-    let vectors = o.embed(&texts(&["раз", "два"])).await.unwrap();
+    let vectors = o
+        .embed(&texts(&["раз", "два"]), InputType::Document)
+        .await
+        .unwrap();
 
     let body: serde_json::Value =
         serde_json::from_slice(&server.received_requests().await.unwrap()[0].body).unwrap();
@@ -54,7 +57,10 @@ async fn client_error_not_retried() {
     })
     .await;
 
-    let err = o.embed(&texts(&["x"])).await.unwrap_err();
+    let err = o
+        .embed(&texts(&["x"]), InputType::Document)
+        .await
+        .unwrap_err();
 
     assert!(
         err.to_string().contains("not found"),
@@ -80,7 +86,7 @@ async fn retries_server_errors() {
     })
     .await;
 
-    let vectors = o.embed(&texts(&["x"])).await.unwrap();
+    let vectors = o.embed(&texts(&["x"]), InputType::Document).await.unwrap();
 
     assert_eq!(calls.load(Ordering::SeqCst), 3);
     assert_eq!(vectors.len(), 1);
@@ -92,7 +98,10 @@ async fn gives_up_after_max_attempts() {
         fake_ollama(|_| ResponseTemplate::new(500).set_body_json(json!({"error": "still down"})))
             .await;
 
-    let err = o.embed(&texts(&["x"])).await.unwrap_err();
+    let err = o
+        .embed(&texts(&["x"]), InputType::Document)
+        .await
+        .unwrap_err();
 
     assert!(err.to_string().contains("after 3 attempts"), "{err}");
     assert_eq!(server.received_requests().await.unwrap().len(), 3);
@@ -104,7 +113,10 @@ async fn count_mismatch() {
         fake_ollama(|_| ResponseTemplate::new(200).set_body_json(json!({"embeddings": [[0.1]]})))
             .await;
 
-    let err = o.embed(&texts(&["x", "y"])).await.unwrap_err();
+    let err = o
+        .embed(&texts(&["x", "y"]), InputType::Document)
+        .await
+        .unwrap_err();
 
     assert!(
         err.to_string().contains("1 embeddings for 2 texts"),
@@ -117,7 +129,10 @@ async fn connection_refused() {
     let mut o = Ollama::new("http://127.0.0.1:1", "bge-m3"); // nothing listens there
     o.backoff = Duration::from_millis(1);
 
-    let err = o.embed(&texts(&["x"])).await.unwrap_err();
+    let err = o
+        .embed(&texts(&["x"]), InputType::Document)
+        .await
+        .unwrap_err();
 
     assert!(
         err.to_string().contains("ollama serve"),
@@ -140,7 +155,7 @@ async fn batches() {
     o.batch = 3;
 
     let all: Vec<String> = ('a'..='g').map(String::from).collect();
-    let vectors = o.embed(&all).await.unwrap();
+    let vectors = o.embed(&all, InputType::Document).await.unwrap();
 
     let sizes: Vec<usize> = server
         .received_requests()

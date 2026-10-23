@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::embed::Fake;
+use crate::embed::recording::Recording;
+use crate::embed::{Fake, InputType};
 use crate::parse::Chunk;
 use crate::store::Document;
 
@@ -46,7 +47,10 @@ async fn indexed_store(files: &[(&str, &str, &str)]) -> (tempfile::TempDir, Stor
         .unwrap();
     let fake = Fake { dim: 8 };
     for (path, section, text) in files {
-        let vectors = fake.embed(&[text.to_string()]).await.unwrap();
+        let vectors = fake
+            .embed(&[text.to_string()], InputType::Document)
+            .await
+            .unwrap();
         let chunks = vec![Chunk {
             section: section.to_string(),
             text: text.to_string(),
@@ -211,4 +215,23 @@ async fn refuses_an_empty_database() {
         .unwrap_err();
 
     assert!(matches!(err, Error::EmptyDatabase), "{err}");
+}
+
+#[tokio::test]
+async fn embeds_the_query_as_a_query() {
+    let (_dir, store, _) = indexed_store(&[("/notes/deploy.md", "", "book the deploy slot")]).await;
+    let embedder = Recording::new(8);
+
+    for mode in [Mode::Vector, Mode::Hybrid, Mode::Text] {
+        let opts = Options {
+            mode,
+            ..Options::default()
+        };
+        search(&store, Some(&embedder), "deploy", &opts)
+            .await
+            .unwrap();
+    }
+
+    // Text mode needs no vector.
+    assert_eq!(embedder.inputs(), [InputType::Query; 2]);
 }

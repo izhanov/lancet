@@ -108,7 +108,9 @@ pub async fn search(
             current: embedder.id(),
         });
     }
-    let mut vectors = embedder.embed(std::slice::from_ref(&query)).await?;
+    let mut vectors = embedder
+        .embed(std::slice::from_ref(&query), embed::InputType::Query)
+        .await?;
     embed::normalize(&mut vectors);
     let vector = vectors.pop().expect("one vector per text");
 

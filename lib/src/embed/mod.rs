@@ -2,16 +2,31 @@
 
 mod fake;
 mod ollama;
+#[cfg(test)]
+pub(crate) mod recording;
 
 pub use fake::Fake;
 pub use ollama::Ollama;
 
 use crate::Result;
 
+/// What a text is embedded for. A short question and the passage that
+/// answers it are not alike as texts, so retrieval models often embed the
+/// two differently: Voyage's `input_type`, the `search_query:` /
+/// `search_document:` prefixes of nomic-embed-text, e5's `query:` /
+/// `passage:`. An embedder whose model makes no difference ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputType {
+    /// A search query.
+    Query,
+    /// A chunk being indexed.
+    Document,
+}
+
 /// Turns texts into vectors of a fixed dimension.
 #[async_trait::async_trait]
 pub trait Embedder: Send + Sync {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
+    async fn embed(&self, texts: &[String], input: InputType) -> Result<Vec<Vec<f32>>>;
 
     /// Identifies the vector space, e.g. "ollama/bge-m3". Vectors from
     /// different IDs are incomparable and must never share a table.
