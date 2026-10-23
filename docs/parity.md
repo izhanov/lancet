@@ -52,7 +52,9 @@ Next, in order:
    semantic search beat an agent with grep? Decides how far code goes.
    It also settles the 600-byte packs for code between definitions, tried
    on routes.rb only ("cancel membership route in storefront account":
-   vector rank 36 → 7, hybrid 8 → 2). Vocabulary gaps ("cancel
+   vector rank 36 → 7, hybrid 8 → 2). They have a cost: data-heavy Ruby
+   (seeds, big hashes) is all "code between definitions", and uscreen_2
+   `app` + `lib` went from 25k chunks to over 55k texts embedded. Vocabulary gaps ("cancel
    subscription" for `cancel_membership`) stay: chunking cannot close them.
    And a chunker version in `meta`: indexing is incremental by mtime, so a
    new chunking in a new `lt` never reaches unchanged files — warn and
@@ -74,8 +76,24 @@ Next, in order:
 5. Embedding throughput. Measured on the M5 with `bge-m3` (2026-10-23):
    61–64 texts/s whatever `OLLAMA_NUM_PARALLEL` (1/4/8), request
    concurrency (1/4/8) or batch size (16/32/64) — the GPU is saturated by
-   one request, so local tuning gives nothing. What is left: fewer chunks,
-   a lighter model (only by eval), several Ollama URLs for remote GPUs.
+   one request, so local tuning gives nothing; `lt` itself idles (parsing
+   ~5 ms a file). Indexing time is texts × tokens × model, so, in order:
+   - **Embedding cache by content**: store a hash of each chunk's embedding
+     text with the model id and reuse the stored vector when it matches.
+     Today `--force`, a new chunking or an edit to one method re-embeds
+     every chunk of the file; with the cache only changed chunks hit the
+     GPU (an edit in the 113 KB stripe_provider.rb: one embedding, not a
+     hundred). The 2026-10-24 re-chunking of uscreen_2 took 1 h 20 min.
+   - **Progress and streaming batches**: `N of M files` (stderr, survives
+     `--quiet` as a final line only), and flushing a batch inside a huge
+     file instead of after it — a seed file or a CSV dump of IDs held
+     ~10k texts without a commit for 20 minutes.
+   - Fewer and shorter texts: noise out of the index (seeds, ID dumps,
+     one-off tasks: tips in the README), the cost of long chunks and of
+     the path/section prefix per text.
+   - A faster model, only by eval: quantized `bge-m3` (Q8 instead of F16),
+     a smaller multilingual model; MLX / Core ML instead of llama.cpp is
+     a hypothesis to measure; several Ollama URLs for remote GPUs.
 6. The rest of the CLI: `list`, `flush`, `evals`, `setup`, `update`.
 7. `lt-server` and tenant databases on S3.
 
