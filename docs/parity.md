@@ -10,12 +10,14 @@ contract. Search internals are allowed to change (native FTS instead of an
 `ILIKE` scan, prefilter instead of post-filtering) as long as `eval` does not
 get worse.
 
-## Status — 2026-10-22
+## Status — 2026-10-23
 
 Released [v0.1.1](https://github.com/izhanov/lancet/releases/tag/v0.1.1):
 core library, all parsers, incremental indexing and `lt index / reindex /
-search / eval`; install with `install.sh`. qazyna is removed from the machine,
-so **agents have no notes search until `lt mcp` lands**.
+search / eval`; install with `install.sh`.
+[v0.1.2](https://github.com/izhanov/lancet/releases/tag/v0.1.2) adds `lt mcp`
+and `lt skill`: registered in Claude Code as `lancet` (user scope), skill
+`lancet-search` installed, so agents have notes search again.
 
 Eval on qazyna's corpus (113 files) and golden set (5 cases), recall@5 / MRR:
 
@@ -27,15 +29,12 @@ Eval on qazyna's corpus (113 files) and golden set (5 cases), recall@5 / MRR:
 
 Next, in order:
 
-1. Release `lt mcp` and `lt skill` (done in code, not released yet), then
-   `claude mcp add -s user lancet -- lt mcp` and `lt skill install` — gives
-   agents search back.
-2. Grow the golden set (5 cases is too few to decide anything), then tune FTS
+1. Grow the golden set (5 cases is too few to decide anything), then tune FTS
    for mixed Russian/English: stemming, stop words, n-grams. Hybrid must beat
    plain vector; today it does not, mostly on Russian queries.
-3. The rest of the CLI: `list`, `flush`, `evals`, `tenants` / `--tenant`,
+2. The rest of the CLI: `list`, `flush`, `evals`, `tenants` / `--tenant`,
    `setup`, `update`.
-4. `lt-server` and tenant databases on S3.
+3. `lt-server` and tenant databases on S3.
 
 Backlog, not decided: ignoring paths while indexing (e.g. `.claude/worktrees`,
 `.gitignore`); smaller binaries (LTO; `lt` is ~200 MB, ~75 MB packed).
