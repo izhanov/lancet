@@ -44,10 +44,26 @@ Next, in order:
 2. `--tenant` / `tenants`, then picking the database by directory: a
    `.lancet.toml` (`db = "uscreen_2"`) found walking up from the working
    directory, like git finds `.git`; precedence flag > env > file > default.
+   With it `lt mcp --about "code of the uscreen_2 Rails app"`, put into the
+   tool descriptions: today every server introduces itself as "the user's
+   notes", so an agent tells `lancet` from `lancet-uscreen` only by name;
+   the `lancet-search` skill should learn about extra `lancet-*` indexes.
 3. A golden set for code (15–20 real questions about uscreen_2): does
    semantic search beat an agent with grep? Decides how far code goes.
-4. Images: OCR text, captions from a vision model, or multimodal
-   embeddings — to be decided.
+4. Images, in two steps. First text from the image, so it lands in the
+   same `chunks` table and the same results as notes: OCR (macOS Vision or
+   Tesseract) always, captions from a local vision model (Ollama) as an
+   option, being seconds per image. Then, if visual search is wanted,
+   multimodal embeddings (CLIP/SigLIP family): a different vector space, so
+   a table of its own (`images`: path, mtime, thumbnail blob, vector) with
+   its model under its own `meta` key — each space re-indexed on its own.
+   Lance suits this (blobs next to vectors, several tables, S3), which also
+   settles keeping LanceDB over SQLite + FTS5 + sqlite-vec.
+   Before step two: a schema version in `meta` (`schema = 1`), so a newer
+   `lt` recognizes an older database and migrates it (Lance can add
+   columns without rewriting data) or asks for `reindex` instead of
+   failing on an unexpected layout. Columns worth adding then: `kind`
+   (text/code/image) and `language`.
 5. Embedding throughput. Measured on the M5 with `bge-m3` (2026-10-23):
    61–64 texts/s whatever `OLLAMA_NUM_PARALLEL` (1/4/8), request
    concurrency (1/4/8) or batch size (16/32/64) — the GPU is saturated by

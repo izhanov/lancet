@@ -144,9 +144,44 @@ Before tasks involving my notes, docs or style guides, use the lancet-search ski
 - database: `~/.local/share/lancet/db.lance` (`--db` / `LANCET_DB`)
 - golden sets for `lt eval`: `~/.local/share/lancet/evals`
   (`--evals` / `LANCET_EVALS`)
+- language plugins: `~/.local/share/lancet/languages`
+  (`--languages` / `LANCET_LANGUAGES`)
 
 `$XDG_DATA_HOME` is honored. Every flag has a `LANCET_*` environment twin;
 see `lt --help`.
+
+### How a database is stored
+
+A database is a [LanceDB](https://lancedb.com) directory: no server, `lt`
+reads and writes the files itself. Every write is a commit that creates a
+new table version, so an interrupted `lt index` leaves the previous version
+intact, and an `lt mcp` running elsewhere sees new writes without locks.
+
+The `chunks` table holds one row per chunk:
+
+| column    | type                      | |
+|-----------|---------------------------|---|
+| `id`      | string                    | `<path>#<ordinal>`, stable across re-indexing |
+| `path`    | string                    | absolute path of the file |
+| `section` | string, nullable          | heading or symbol trail: `Install > macOS`, `class Invoice > method total` |
+| `text`    | string                    | the chunk as written in the file |
+| `vector`  | `FixedSizeList<Float32, N>` | the embedding, unit length |
+| `mtime`   | int64                     | the file's mtime, for incremental indexing |
+
+The path tail and the section are woven into the text the model embeds,
+not into `text`. Full-text search runs on a BM25 index over `text`; vector
+search is an exact scan (no approximate index), ~0.13 s on 25k chunks.
+A `meta` table keeps key/value pairs, today the embedder.
+
+**A database belongs to one embedding model.** The vector width `N` is
+fixed when the table is created (1024 for `bge-m3`), and the model's id is
+stored in `meta`: vectors of different models are incomparable even when
+their widths match, so `lt` refuses to index into or search a database
+with another model. To switch models, `lt reindex <path>` — it re-embeds
+everything. Everything else in a row is plain data.
+
+Inspect a database outside `lt` with any Arrow tool, e.g. in Python:
+`lancedb.connect("~/.local/share/lancet/db.lance").open_table("chunks").to_pandas()`.
 
 ## Build from source
 
