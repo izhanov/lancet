@@ -94,7 +94,8 @@ Index the directories you ask questions about, not the whole repository:
   separate root if you miss them.
 - **What git ignores is skipped already** (`vendor/bundle`, `node_modules`,
   build output). To leave out more without listing roots, put an `.ignore`
-  file (gitignore syntax) in the directory you index, e.g. `db/migrate/`.
+  file (gitignore syntax) in the directory you index, e.g. `db/migrate/` or
+  one-off data scripts like `lib/tasks/one_time/`.
 - **The first run is the slow one**: every chunk goes through the embedding
   model, roughly 40–50 chunks per second with `bge-m3` on an Apple M5, so a
   large app takes minutes. After that `lt index` re-embeds only files whose

@@ -3,6 +3,7 @@ name = "lancet-lib"
 description = "Lancet core: parsing, embedding, indexing and hybrid search over LanceDB"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

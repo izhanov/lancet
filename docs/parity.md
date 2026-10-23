@@ -18,6 +18,14 @@ search / eval`; install with `install.sh`.
 [v0.1.2](https://github.com/izhanov/lancet/releases/tag/v0.1.2) adds `lt mcp`
 and `lt skill`: registered in Claude Code as `lancet` (user scope), skill
 `lancet-search` installed, so agents have notes search again.
+v0.2.0 goes beyond qazyna: source code indexed by symbol with languages as
+plugins (`lt lang add`, any tree-sitter grammar), `.gitignore` / `.ignore`
+honored, batched writes (uscreen_2 without embedding: 16 min → 9 s), the
+embedder told query from document.
+
+Code index of uscreen_2 `app` + `lib` (4.8k files): 25k chunks, 216 MB,
+11.7 min with `bge-m3` on an M5 (~40 chunks/s, Ollama-bound); search
+0.01 s text, 0.13 s vector/hybrid (brute force, no vector index).
 
 Eval on qazyna's corpus (113 files) and golden set (5 cases), recall@5 / MRR:
 
@@ -29,15 +37,28 @@ Eval on qazyna's corpus (113 files) and golden set (5 cases), recall@5 / MRR:
 
 Next, in order:
 
-1. Grow the golden set (5 cases is too few to decide anything), then tune FTS
-   for mixed Russian/English: stemming, stop words, n-grams. Hybrid must beat
-   plain vector; today it does not, mostly on Russian queries.
-2. The rest of the CLI: `list`, `flush`, `evals`, `tenants` / `--tenant`,
-   `setup`, `update`.
-3. `lt-server` and tenant databases on S3.
+1. Grow the golden set (5 cases is too few to decide anything; a 37-case
+   draft is waiting for review), then tune FTS for mixed Russian/English:
+   stemming, stop words, n-grams, path and section in the FTS index. On the
+   draft hybrid already beats vector (0.92 vs 0.86 recall@5).
+2. `--tenant` / `tenants`, then picking the database by directory: a
+   `.lancet.toml` (`db = "uscreen_2"`) found walking up from the working
+   directory, like git finds `.git`; precedence flag > env > file > default.
+3. A golden set for code (15–20 real questions about uscreen_2): does
+   semantic search beat an agent with grep? Decides how far code goes.
+4. Images: OCR text, captions from a vision model, or multimodal
+   embeddings — to be decided.
+5. Embedding throughput: `OLLAMA_NUM_PARALLEL` and batch size (benchmark),
+   several Ollama URLs for remote GPUs.
+6. The rest of the CLI: `list`, `flush`, `evals`, `setup`, `update`.
+7. `lt-server` and tenant databases on S3.
 
-Backlog, not decided: ignoring paths while indexing (e.g. `.claude/worktrees`,
-`.gitignore`); smaller binaries (LTO; `lt` is ~200 MB, ~75 MB packed).
+Backlog, not decided: a vector index (IVF-PQ / HNSW with refine) once a
+database passes a few hundred thousand chunks or ~100 ms per vector search;
+enriching chunks at index time with an LLM (contextual retrieval) through
+the user's agent CLI (`claude -p`, `codex exec`) or a local model; a
+reference graph from the tags queries' `@reference.*` (`find_references`);
+smaller binaries (LTO; `lt` is ~210 MB).
 
 ## CLI (`lt`)
 

@@ -3,6 +3,7 @@ name = "lancet-cli"
 description = "Lancet command line: local semantic search over your files"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
