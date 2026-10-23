@@ -91,6 +91,11 @@ Next, in order:
    - Fewer and shorter texts: noise out of the index (seeds, ID dumps,
      one-off tasks: tips in the README), the cost of long chunks and of
      the path/section prefix per text.
+   - A `.lancetignore` (gitignore syntax, read by `lt` only), after
+     tenants. `.ignore` is shared with ripgrep and often tracked — it is in
+     uscreen_2 — so adding `lib/tasks/one_time/` there would hide the files
+     from the whole team's `rg`; `.git/info/exclude` hides them from the
+     user's own `rg` too.
    - A faster model, only by eval: quantized `bge-m3` (Q8 instead of F16),
      a smaller multilingual model; MLX / Core ML instead of llama.cpp is
      a hypothesis to measure; several Ollama URLs for remote GPUs.
