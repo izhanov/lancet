@@ -41,8 +41,8 @@ impl Parser for Pdf {
         Ok(chunks.chunks)
     }
 
-    fn extensions(&self) -> &'static [&'static str] {
-        &[".pdf"]
+    fn extensions(&self) -> Vec<&str> {
+        vec![".pdf"]
     }
 }
 

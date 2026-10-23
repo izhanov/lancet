@@ -45,12 +45,38 @@ lt search "how do we deploy to preprod"
 lt search "deploy -staging" --mode text --json
 ```
 
-Supported formats: Markdown, PDF, XML, CSV/TSV, DOCX. Hidden directories
-(`.git` and the like) are skipped. Files deleted from disk drop out of the
-index on the next `lt index` of their directory.
+Supported formats: Markdown, PDF, XML, CSV/TSV, DOCX, plus source code in
+any language you add (see below). Hidden directories (`.git` and the like)
+are skipped; inside a git repository `.gitignore` is honored, and an
+`.ignore` file excludes paths anywhere. Files deleted from disk drop out of
+the index on the next `lt index` of their directory.
 
 `-word` and `-"a phrase"` in a query exclude results containing them;
 `--exclude-path <fragment>` drops results by file path.
+
+## Source code
+
+Code is chunked by symbol: a method, class or module that fits is one
+chunk, a bigger one splits into its nested definitions, and each chunk's
+section is the trail to it (`module Billing > class Invoice > method total`).
+Lancet knows no languages itself: a language is a plugin, installed
+straight from the tree-sitter grammar's GitHub repository.
+
+```sh
+lt lang add ruby --ext .rake --ext .gemspec   # tree-sitter/tree-sitter-ruby, latest release
+lt lang add python
+lt lang add someone/tree-sitter-elixir@v0.3.0  # any repository, pinned tag
+lt lang list
+lt index ~/code/my-app
+```
+
+A plugin is a directory in `~/.local/share/lancet/languages`
+(`--languages` / `LANCET_LANGUAGES`) with three files: `language.toml`
+(the grammar's name and file extensions), `grammar.wasm` (the grammar
+compiled to WebAssembly, from the grammar's release) and `tags.scm` (the
+grammar's own `queries/tags.scm`, which marks definitions). For a grammar
+that publishes no `.wasm`, build one with `tree-sitter build --wasm` and
+put the three files there by hand.
 
 ## Use from Claude Code
 
@@ -81,7 +107,7 @@ see `lt --help`.
 
 ## Build from source
 
-Needs Rust 1.91+ and `protoc` (Lance's build scripts compile protobuf
+Needs Rust 1.95+ and `protoc` (Lance's build scripts compile protobuf
 definitions): `brew install protobuf` / `apt install protobuf-compiler`.
 
 ```sh

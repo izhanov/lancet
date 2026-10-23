@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use anyhow::bail;
 use lancet_lib::index::{Indexer, Options};
-use lancet_lib::parse::Registry;
 
 use super::{Global, pretty_path};
 
@@ -29,7 +28,7 @@ pub async fn run(g: &Global, roots: &[PathBuf], reset: bool, force: bool) -> any
         store.reset().await?;
     }
 
-    let indexer = Indexer::new(Registry::with_defaults(), g.embedder());
+    let indexer = Indexer::new(g.parsers()?, g.embedder());
     let report = |path: &str, chunks: usize| {
         if !g.quiet {
             println!("  {} — {chunks} chunks indexed", pretty_path(path));

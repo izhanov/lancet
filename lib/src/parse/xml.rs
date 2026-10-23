@@ -23,8 +23,8 @@ impl Parser for Xml {
         Ok(chunks.chunks)
     }
 
-    fn extensions(&self) -> &'static [&'static str] {
-        &[".xml"]
+    fn extensions(&self) -> Vec<&str> {
+        vec![".xml"]
     }
 }
 

@@ -2,6 +2,7 @@
 
 pub mod eval;
 pub mod index;
+pub mod lang;
 pub mod mcp;
 pub mod search;
 pub mod skill;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 use clap::{ArgAction, ValueEnum};
 use lancet_lib::config;
 use lancet_lib::embed::{Embedder, Fake, Ollama};
+use lancet_lib::parse::{Code, Registry};
 use lancet_lib::store::{OpenOptions, Store};
 
 /// Flags accepted by every command, each with a `LANCET_*` env twin.
@@ -52,6 +54,9 @@ pub struct Global {
     /// Directory with golden-set files for `lt eval`
     #[arg(long, global = true, env = "LANCET_EVALS", default_value_os_t = config::default_evals_dir())]
     pub evals: PathBuf,
+    /// Directory with language plugins for source code (`lt lang`)
+    #[arg(long, global = true, env = "LANCET_LANGUAGES", default_value_os_t = config::default_languages_dir())]
+    pub languages: PathBuf,
     /// Re-open the table on every read to see writes from other processes
     #[arg(long, global = true, env = "LANCET_FRESH_READS", default_value_t = true, action = ArgAction::Set)]
     pub fresh_reads: bool,
@@ -83,6 +88,24 @@ impl Global {
             },
         )
         .await?)
+    }
+
+    /// The built-in document parsers plus one per installed language plugin.
+    pub fn parsers(&self) -> anyhow::Result<Registry> {
+        let mut registry = Registry::with_defaults();
+        for lang in lancet_lib::lang::load_all(&self.languages)? {
+            tracing::debug!(language = %lang.manifest.name, "language plugin loaded");
+            for ext in &lang.manifest.extensions {
+                if registry.for_path(Path::new(&format!("x{ext}"))).is_some() {
+                    tracing::warn!(
+                        language = %lang.manifest.name, extension = %ext,
+                        "extension already claimed by another parser; this plugin takes it over"
+                    );
+                }
+            }
+            registry.register(Code::new(lang));
+        }
+        Ok(registry)
     }
 
     pub fn embedder(&self) -> Arc<dyn Embedder> {

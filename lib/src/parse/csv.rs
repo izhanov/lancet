@@ -75,8 +75,8 @@ impl Parser for Csv {
         Ok(chunks.chunks)
     }
 
-    fn extensions(&self) -> &'static [&'static str] {
-        &[".csv", ".tsv"]
+    fn extensions(&self) -> Vec<&str> {
+        vec![".csv", ".tsv"]
     }
 }
 
@@ -106,7 +106,7 @@ fn sniff_delimiter(content: &str, tsv: bool) -> u8 {
     let first = content.lines().next().unwrap_or("");
     let mut best = if tsv { b'\t' } else { b',' };
     let mut max = 0;
-    for d in [b',', b';', b'\t'] {
+    for d in *b",;\t" {
         let n = first.bytes().filter(|&b| b == d).count();
         if n > max {
             (best, max) = (d, n);

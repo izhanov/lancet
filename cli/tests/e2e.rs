@@ -40,6 +40,7 @@ impl Env {
             .current_dir(self.dir.path())
             .env("LANCET_DB", self.dir.path().join("db.lance"))
             .env("LANCET_EVALS", self.dir.path().join("evals"))
+            .env("LANCET_LANGUAGES", self.dir.path().join("languages"))
             .env("LANCET_EMBEDDER", "fake")
             .env("NO_COLOR", "1")
             .env("HOME", self.dir.path());
@@ -269,4 +270,53 @@ fn skill_install_show_uninstall() {
     assert!(!skill.parent().unwrap().exists());
     // Removing what is not there is not an error.
     stdout(&env.lt(&["skill", "uninstall"]));
+}
+
+/// Installs the Ruby plugin the way `lt lang add ruby` lays it out, with
+/// the pinned grammar from the lib's testdata instead of a download.
+fn install_ruby(env: &Env) {
+    let fixture = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../lib/src/parse/code/testdata/ruby"
+    );
+    let plugin = env.dir.path().join("languages/ruby");
+    std::fs::create_dir_all(&plugin).unwrap();
+    for file in ["language.toml", "tags.scm", "grammar.wasm"] {
+        std::fs::copy(format!("{fixture}/{file}"), plugin.join(file)).unwrap();
+    }
+}
+
+#[test]
+fn indexes_ruby_by_symbol_once_the_plugin_is_installed() {
+    let env = Env::new();
+    env.write(
+        "app/invoice.rb",
+        "class Invoice\n  # Sum of the line items.\n  def total\n    items.sum(&:price)\n  end\nend\n",
+    );
+
+    let without = env.lt(&["index", "app"]);
+    assert!(String::from_utf8_lossy(&without.stderr).contains("no supported files found"));
+    assert!(stdout(&env.lt(&["lang", "list"])).starts_with("no languages installed"));
+
+    install_ruby(&env);
+    assert_eq!(
+        stdout(&env.lt(&["lang", "list"])),
+        "ruby       .rb .rake .gemspec       tree-sitter/tree-sitter-ruby@v0.23.1\n"
+    );
+    let out = stdout(&env.lt(&["index", "app"]));
+    assert!(out.contains("app/invoice.rb — 1 chunks indexed"), "{out}");
+
+    let found = stdout(&env.lt(&["search", "line items", "--mode", "text", "--json"]));
+    let found: serde_json::Value = serde_json::from_str(&found).unwrap();
+    assert_eq!(found[0]["section"], "class Invoice", "{found}");
+
+    // Without its parser a file drops out of the index like a deleted one.
+    assert_eq!(
+        stdout(&env.lt(&["lang", "remove", "ruby"])),
+        "removed ruby\n"
+    );
+    assert_eq!(
+        stdout(&env.lt(&["index", "app"])),
+        "nothing to do: 0 files unchanged, 1 stale removed\n"
+    );
 }

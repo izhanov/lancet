@@ -1,5 +1,6 @@
 //! File parsers: each turns one file into chunks.
 
+mod code;
 mod csv;
 mod docx;
 mod markdown;
@@ -12,6 +13,7 @@ use std::sync::{Arc, LazyLock};
 
 use regex::Regex;
 
+pub use self::code::Code;
 pub use self::csv::Csv;
 pub use self::docx::Docx;
 pub use self::markdown::Markdown;
@@ -40,7 +42,7 @@ pub trait Parser: Send + Sync {
     fn parse(&self, path: &Path) -> Result<Vec<Chunk>>;
 
     /// Lowercase extensions with the dot: ".md", ".markdown".
-    fn extensions(&self) -> &'static [&'static str];
+    fn extensions(&self) -> Vec<&str>;
 }
 
 /// Maps file extensions to parsers, case-insensitively.
@@ -94,6 +96,33 @@ impl Chunks {
                 ordinal,
             });
         }
+    }
+}
+
+impl Chunks {
+    /// Code keeps its layout: a piece that fits is one chunk as written,
+    /// only blank lines around it trimmed; a bigger one is packed by blank
+    /// lines like prose.
+    fn push_code(&mut self, section: &str, text: &str) {
+        let first = text
+            .split_inclusive('\n')
+            .take_while(|line| line.trim().is_empty())
+            .map(str::len)
+            .sum::<usize>();
+        let text = text[first..].trim_end();
+        if text.is_empty() {
+            return;
+        }
+        if text.len() > MAX_CHUNK_CHARS {
+            self.push(section, text);
+            return;
+        }
+        let ordinal = self.chunks.len();
+        self.chunks.push(Chunk {
+            section: section.to_string(),
+            text: text.to_string(),
+            ordinal,
+        });
     }
 }
 

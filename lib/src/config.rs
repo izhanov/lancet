@@ -21,6 +21,12 @@ pub fn default_db_path() -> PathBuf {
     )
 }
 
+/// Language plugins for source code (see [`crate::lang`]):
+/// `~/.local/share/lancet/languages`.
+pub fn default_languages_dir() -> PathBuf {
+    data_dir().map_or_else(|| PathBuf::from("data/languages"), |d| d.join("languages"))
+}
+
 /// Golden sets for `lt eval` live next to the database:
 /// `~/.local/share/lancet/evals`.
 pub fn default_evals_dir() -> PathBuf {

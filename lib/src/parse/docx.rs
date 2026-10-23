@@ -29,8 +29,8 @@ impl Parser for Docx {
         Ok(to_chunks(&paragraphs))
     }
 
-    fn extensions(&self) -> &'static [&'static str] {
-        &[".docx"]
+    fn extensions(&self) -> Vec<&str> {
+        vec![".docx"]
     }
 }
 

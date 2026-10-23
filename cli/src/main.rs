@@ -30,6 +30,11 @@ enum Command {
     Eval(commands::eval::Args),
     /// Serve the index to AI agents over MCP (stdio)
     Mcp,
+    /// Manage language plugins for indexing source code
+    Lang {
+        #[command(subcommand)]
+        action: commands::lang::Action,
+    },
     /// Manage the Claude Code skill that teaches AI agents to search with lt
     Skill {
         #[command(subcommand)]
@@ -67,6 +72,7 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Search(args) => commands::search::run(g, args).await,
         Command::Eval(args) => commands::eval::run(g, args).await,
         Command::Mcp => commands::mcp::run(g).await,
+        Command::Lang { action } => commands::lang::run(g, action).await,
         Command::Skill { action } => commands::skill::run(action),
     }
 }

@@ -1,0 +1,6 @@
+# Test fixture: the plugin `lt lang add ruby` installs from
+# tree-sitter/tree-sitter-ruby@v0.23.1; tags.scm is its queries/tags.scm.
+name = "ruby"
+extensions = [".rb", ".rake", ".gemspec"]
+source = "tree-sitter/tree-sitter-ruby@v0.23.1"
+grammar_sha256 = "09a96427d7c72f0613ed470cd9812223fc4a91d6a9c025c0235cc6bd59ff96f4"

@@ -17,8 +17,8 @@ impl Parser for Markdown {
         Ok(parse_str(&read_to_string(path)?))
     }
 
-    fn extensions(&self) -> &'static [&'static str] {
-        &[".md", ".markdown"]
+    fn extensions(&self) -> Vec<&str> {
+        vec![".md", ".markdown"]
     }
 }
 

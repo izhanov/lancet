@@ -4,6 +4,7 @@ pub mod config;
 pub mod embed;
 pub mod eval;
 pub mod index;
+pub mod lang;
 pub mod parse;
 pub mod search;
 pub mod store;
@@ -28,6 +29,10 @@ pub enum Error {
     PdfToolMissing,
     #[error("no supported files found in {0}")]
     NoFiles(String),
+    #[error("language plugin {path}: {message}")]
+    Language { path: String, message: String },
+    #[error("download {url}: {message}")]
+    Download { url: String, message: String },
     #[error("{path}: {message}")]
     Golden { path: String, message: String },
 
