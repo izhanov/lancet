@@ -174,3 +174,11 @@ Global flags, each with an env twin (`QAZYNA_*` in qazyna, `LANCET_*` in Lancet)
 - [x] MCP server name in the Claude config: `lancet` (tools are `mcp__lancet__*`)
 - [x] environment variable prefix: `LANCET_`
 - [x] existing data: reindex from scratch, no migration
+- [ ] `tenant` → `namespace`? (`--tenant` / `LANCET_TENANT` / `lt tenants`
+  in qazyna). For: the local use is separate indexes of one person (notes,
+  the uscreen_2 code), not accounts, and "tenant" reads as multi-account
+  SaaS. Against: `tenant` is the qazyna contract and the right word for
+  `lt-server` with one database per account on S3; LanceDB has its own
+  "namespace" API (the `lance-namespace` crates), so the word would mean two
+  things in one codebase. A third option: a neutral `--index <name>`
+  locally, `tenant` kept for the server. Decide before implementing.
