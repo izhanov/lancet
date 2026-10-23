@@ -124,8 +124,9 @@ pub fn setup_logging(g: &Global) {
         (_, true) => "debug",
         _ => "info",
     };
+    // The binary crate is `lt`, its modules log as `lt::commands::...`.
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| format!("warn,lancet_lib={level},lancet_cli={level}").into());
+        .unwrap_or_else(|_| format!("warn,lancet_lib={level},lt={level}").into());
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(filter)
