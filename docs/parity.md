@@ -61,7 +61,17 @@ database passes a few hundred thousand chunks or ~100 ms per vector search;
 enriching chunks at index time with an LLM (contextual retrieval) through
 the user's agent CLI (`claude -p`, `codex exec`) or a local model; a
 reference graph from the tags queries' `@reference.*` (`find_references`);
-smaller binaries (LTO; `lt` is ~210 MB).
+smaller binaries (LTO; `lt` is ~210 MB); the `lancet-search` skill telling
+the agent to restate a question in the code's own terms, in English, before
+searching, or to send both the original and the restated query ("как
+пользователи меняют о себе инфу" misses both profile controllers in
+uscreen_2, "user edits own profile name avatar password" puts them first);
+search results saying which rankers matched (in hybrid a Russian query over
+code is vector only and tops out at 0.5, which reads as a weak match);
+rewriting queries inside `lt` (an LLM or synonyms), only if the skill rule
+is not enough; text mode ranking a whole identifier above its split words
+(`cancel_subscription_immediately` puts `cancel_immediately!` above the
+method's own definition).
 
 ## CLI (`lt`)
 
