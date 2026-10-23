@@ -109,29 +109,47 @@ impl Store {
     /// was stored for the same path: re-indexing never duplicates, and
     /// chunks that disappeared from the file are removed.
     pub async fn add_document(&self, doc: &Document) -> Result<()> {
-        if doc.chunks.is_empty() {
+        self.add_documents(std::slice::from_ref(doc)).await
+    }
+
+    /// [`Store::add_document`] for many files in one commit. Every commit
+    /// is a new table version with files of its own, and its cost grows
+    /// with the number of versions: a commit per file made indexing a code
+    /// repository take minutes of mostly filesystem work.
+    pub async fn add_documents(&self, docs: &[Document]) -> Result<()> {
+        let docs: Vec<&Document> = docs.iter().filter(|d| !d.chunks.is_empty()).collect();
+        let Some(first) = docs.first() else {
             return Ok(());
+        };
+        for doc in &docs {
+            if doc.chunks.len() != doc.vectors.len() {
+                return Err(Error::ChunksVectorsMismatch {
+                    chunks: doc.chunks.len(),
+                    vectors: doc.vectors.len(),
+                });
+            }
         }
-        if doc.chunks.len() != doc.vectors.len() {
-            return Err(Error::ChunksVectorsMismatch {
-                chunks: doc.chunks.len(),
-                vectors: doc.vectors.len(),
-            });
-        }
-        let dim = doc.vectors[0].len();
+        let dim = first.vectors[0].len();
 
         let _write = self.writes.lock().await;
         let table = self.writable_chunks(dim).await?;
-        let batch = chunk_batch(doc, dim)?;
-        let schema = batch.schema();
+        let batches = docs
+            .iter()
+            .map(|doc| chunk_batch(doc, dim))
+            .collect::<Result<Vec<_>>>()?;
+        let schema = batches[0].schema();
+        let paths: Vec<String> = docs.iter().map(|d| quote(&d.path)).collect();
 
         let mut merge = table.merge_insert(&["id"]);
         merge
             .when_matched_update_all(None)
             .when_not_matched_insert_all()
-            .when_not_matched_by_source_delete(Some(path_filter(&doc.path)));
+            .when_not_matched_by_source_delete(Some(format!("path IN ({})", paths.join(", "))));
         merge
-            .execute(Box::new(RecordBatchIterator::new([Ok(batch)], schema)))
+            .execute(Box::new(RecordBatchIterator::new(
+                batches.into_iter().map(Ok),
+                schema,
+            )))
             .await?;
 
         ensure_fts_index(&table).await
@@ -541,7 +559,12 @@ fn column<'a, T: Array + 'static>(b: &'a RecordBatch, name: &str) -> Result<&'a 
 }
 
 fn path_filter(path: &str) -> String {
-    format!("path = '{}'", path.replace('\'', "''"))
+    format!("path = {}", quote(path))
+}
+
+/// An SQL string literal.
+fn quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
 }
 
 #[cfg(test)]

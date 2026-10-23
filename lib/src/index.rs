@@ -16,6 +16,11 @@ use crate::search::META_EMBEDDER_KEY;
 use crate::store::{Document, Store};
 use crate::{Error, Result};
 
+/// Prepared files are written in batches of this many files or chunks,
+/// whichever fills first: one commit per batch, not per file.
+const BATCH_FILES: usize = 64;
+const BATCH_CHUNKS: usize = 4096;
+
 pub struct Indexer {
     parsers: Registry,
     embedder: Arc<dyn Embedder>,
@@ -111,15 +116,24 @@ impl Indexer {
         }
 
         let mut results = futures::stream::iter(&work)
-            .map(|path| async move { (path, self.index_file(store, path).await) })
+            .map(|path| async move { (path, self.prepare(path).await) })
             .buffer_unordered(self.concurrency);
+        let mut batch: Vec<Document> = Vec::new();
         while let Some((path, result)) = results.next().await {
             match result {
-                Ok(chunks) => {
+                Ok(doc) if doc.chunks.is_empty() => {
+                    // Nothing to store, but drop stale chunks of a now-empty file.
+                    store.delete_by_path(&doc.path).await?;
                     sum.files += 1;
-                    sum.chunks += chunks;
                     if let Some(on_file) = opts.on_file {
-                        on_file(&path_key(path), chunks);
+                        on_file(&doc.path, 0);
+                    }
+                }
+                Ok(doc) => {
+                    batch.push(doc);
+                    let chunks: usize = batch.iter().map(|d| d.chunks.len()).sum();
+                    if batch.len() >= BATCH_FILES || chunks >= BATCH_CHUNKS {
+                        write(store, std::mem::take(&mut batch), &mut sum, opts).await;
                     }
                 }
                 Err(err) => {
@@ -128,6 +142,7 @@ impl Indexer {
                 }
             }
         }
+        write(store, batch, &mut sum, opts).await;
 
         if sum.files > 0 || sum.removed > 0 {
             store.optimize().await?;
@@ -139,6 +154,18 @@ impl Indexer {
     /// number of chunks stored. The caller is expected to have checked the
     /// embedder against the store (see [`check_embedder_meta`]).
     pub async fn index_file(&self, store: &Store, path: &Path) -> Result<usize> {
+        let doc = self.prepare(path).await?;
+        if doc.chunks.is_empty() {
+            // Nothing to store, but drop stale chunks of a now-empty file.
+            store.delete_by_path(&doc.path).await?;
+            return Ok(0);
+        }
+        store.add_document(&doc).await?;
+        Ok(doc.chunks.len())
+    }
+
+    /// Parse → embed: one file ready to store. No chunks for an empty file.
+    async fn prepare(&self, path: &Path) -> Result<Document> {
         let key = path_key(path);
         let parser = self.parsers.for_path(path).ok_or_else(|| Error::Parse {
             path: key.clone(),
@@ -155,9 +182,12 @@ impl Indexer {
             })??;
         tracing::debug!(file = %key, chunks = chunks.len(), took = ?t.elapsed(), "parsed");
         if chunks.is_empty() {
-            // Nothing to store, but drop stale chunks of a now-empty file.
-            store.delete_by_path(&key).await?;
-            return Ok(0);
+            return Ok(Document {
+                path: key,
+                mtime: mtime(path)?,
+                chunks,
+                vectors: Vec::new(),
+            });
         }
 
         let texts: Vec<String> = chunks.iter().map(|c| embedding_text(&key, c)).collect();
@@ -169,17 +199,12 @@ impl Indexer {
         embed::normalize(&mut vectors);
         tracing::debug!(file = %key, vectors = vectors.len(), took = ?t.elapsed(), "embedded");
 
-        let n = chunks.len();
-        let doc = Document {
-            path: key.clone(),
+        Ok(Document {
             mtime: mtime(path)?,
+            path: key,
             chunks,
             vectors,
-        };
-        let t = Instant::now();
-        store.add_document(&doc).await?;
-        tracing::debug!(file = %key, took = ?t.elapsed(), "stored");
-        Ok(n)
+        })
     }
 
     /// Files under `roots` that have a registered parser. Hidden directories
@@ -226,6 +251,43 @@ impl Indexer {
             }
         }
         Ok(files)
+    }
+}
+
+/// Stores a batch of prepared files in one commit and reports them. If the
+/// commit fails, the files are retried one by one, so a single bad file
+/// costs only itself.
+async fn write(store: &Store, batch: Vec<Document>, sum: &mut Summary, opts: &Options<'_>) {
+    if batch.is_empty() {
+        return;
+    }
+    let t = Instant::now();
+    let stored: Vec<Result<()>> = match store.add_documents(&batch).await {
+        Ok(()) => batch.iter().map(|_| Ok(())).collect(),
+        Err(err) => {
+            tracing::warn!(files = batch.len(), error = %err, "batch write failed, retrying file by file");
+            let mut each = Vec::new();
+            for doc in &batch {
+                each.push(store.add_document(doc).await);
+            }
+            each
+        }
+    };
+    tracing::debug!(files = batch.len(), took = ?t.elapsed(), "stored");
+    for (doc, result) in batch.iter().zip(stored) {
+        match result {
+            Ok(()) => {
+                sum.files += 1;
+                sum.chunks += doc.chunks.len();
+                if let Some(on_file) = opts.on_file {
+                    on_file(&doc.path, doc.chunks.len());
+                }
+            }
+            Err(err) => {
+                sum.failed += 1;
+                tracing::error!(file = %doc.path, error = %err, "failed to index");
+            }
+        }
     }
 }
 

@@ -81,6 +81,30 @@ async fn reindex_drops_chunks_gone_from_the_file() {
 }
 
 #[tokio::test]
+async fn add_documents_replaces_many_files_in_one_commit() {
+    let (_dir, st) = open_test_store().await;
+    st.add_documents(&[
+        doc("a.md", &["one", "two", "three"]),
+        doc("b.md", &["other file"]),
+        doc("c.md", &["untouched"]),
+    ])
+    .await
+    .unwrap();
+    let paths = st.paths().await.unwrap();
+    assert_eq!(paths.len(), 3);
+
+    st.add_documents(&[doc("a.md", &["one"]), doc("b.md", &["new", "text"])])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        st.count().await.unwrap(),
+        4,
+        "a.md shrank to 1, b.md grew to 2, c.md kept its 1"
+    );
+}
+
+#[tokio::test]
 async fn delete_by_path() {
     let (_dir, st) = open_test_store().await;
     st.add_document(&doc("a.md", &["one"])).await.unwrap();
