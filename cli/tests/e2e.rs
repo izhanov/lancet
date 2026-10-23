@@ -1,7 +1,8 @@
 //! End-to-end: the real `lt` binary on a temp database with the fake
 //! embedder, so no Ollama is needed.
 
-use std::process::{Command, Output};
+use std::io::Write;
+use std::process::{Command, Output, Stdio};
 
 struct Env {
     dir: tempfile::TempDir,
@@ -33,16 +34,65 @@ impl Env {
         dir.join(rel).to_string_lossy().into_owned()
     }
 
-    fn lt(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_lt"))
-            .args(args)
+    fn command(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_lt"));
+        cmd.args(args)
             .current_dir(self.dir.path())
             .env("LANCET_DB", self.dir.path().join("db.lance"))
             .env("LANCET_EVALS", self.dir.path().join("evals"))
             .env("LANCET_EMBEDDER", "fake")
             .env("NO_COLOR", "1")
-            .output()
-            .unwrap()
+            .env("HOME", self.dir.path());
+        cmd
+    }
+
+    fn lt(&self, args: &[&str]) -> Output {
+        self.command(args).output().unwrap()
+    }
+
+    /// Runs `lt mcp` through one session: the handshake, then `calls` as
+    /// `tools/call` requests. Returns each call's text payload and isError,
+    /// in order; closing stdin ends the server.
+    fn mcp(&self, calls: &[serde_json::Value]) -> Vec<(String, bool)> {
+        let mut child = self
+            .command(&["mcp"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        let mut send = |msg: serde_json::Value| writeln!(stdin, "{msg}").unwrap();
+        send(
+            serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "e2e", "version": "0"}}}),
+        );
+        send(serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+        for (i, params) in calls.iter().enumerate() {
+            send(
+                serde_json::json!({"jsonrpc": "2.0", "id": i + 1, "method": "tools/call", "params": params}),
+            );
+        }
+        drop(stdin);
+
+        let out = stdout(&child.wait_with_output().unwrap());
+        let mut results = vec![None; calls.len()];
+        for line in out.lines() {
+            let msg: serde_json::Value = serde_json::from_str(line).unwrap();
+            let id = msg["id"].as_u64().unwrap() as usize;
+            if id == 0 {
+                assert_eq!(msg["result"]["serverInfo"]["name"], "lancet", "{line}");
+                continue;
+            }
+            let result = &msg["result"];
+            let text = result["content"][0]["text"].as_str().unwrap().to_string();
+            results[id - 1] = Some((text, result["isError"] == true));
+        }
+        results
+            .into_iter()
+            .map(|r| r.expect("a response to every call"))
+            .collect()
     }
 }
 
@@ -149,4 +199,74 @@ fn eval_reports_recall_and_mrr() {
         out.contains("recall@5 0.50 (1/2)   MRR 0.500   mode=hybrid"),
         "{out}"
     );
+}
+
+#[test]
+fn mcp_tools() {
+    let env = Env::new();
+    stdout(&env.lt(&["index", "notes"]));
+
+    let replies = env.mcp(&[
+        serde_json::json!({"name": "search_notes", "arguments": {
+            "query": "team", "mode": "text", "exclude": ["preprod"]}}),
+        serde_json::json!({"name": "list_files", "arguments": {}}),
+        serde_json::json!({"name": "index_status", "arguments": {}}),
+        serde_json::json!({"name": "search_notes", "arguments": {"query": "x", "mode": "fuzzy"}}),
+    ]);
+
+    let (found, failed) = &replies[0];
+    assert!(!failed, "{found}");
+    let found: serde_json::Value = serde_json::from_str(found).unwrap();
+    assert_eq!(found.as_array().unwrap().len(), 1, "{found}");
+    assert_eq!(found[0]["section"], "Deploy > Slack");
+
+    let files: serde_json::Value = serde_json::from_str(&replies[1].0).unwrap();
+    let paths: Vec<_> = files
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| &f["path"])
+        .collect();
+    assert_eq!(
+        paths,
+        [&env.path("notes/deploy.md"), &env.path("notes/people.csv")]
+    );
+    assert!(
+        files[0]["modified"].as_str().unwrap().ends_with('Z'),
+        "{files}"
+    );
+
+    let status: serde_json::Value = serde_json::from_str(&replies[2].0).unwrap();
+    assert_eq!(
+        status,
+        serde_json::json!({"chunks": 3, "embedder": "fake/32"})
+    );
+
+    assert_eq!(
+        replies[3],
+        (
+            "unknown mode \"fuzzy\" (want hybrid, vector or text)".to_string(),
+            true
+        )
+    );
+}
+
+#[test]
+fn skill_install_show_uninstall() {
+    let env = Env::new();
+    let skill = env.dir.path().join(".claude/skills/lancet-search/SKILL.md");
+
+    let out = stdout(&env.lt(&["skill", "install"]));
+    assert!(out.starts_with("skill installed: "), "{out}");
+    let installed = std::fs::read_to_string(&skill).unwrap();
+    assert!(
+        installed.starts_with("---\nname: lancet-search\n"),
+        "{installed}"
+    );
+    assert_eq!(stdout(&env.lt(&["skill", "show"])), installed);
+
+    stdout(&env.lt(&["skill", "uninstall"]));
+    assert!(!skill.parent().unwrap().exists());
+    // Removing what is not there is not an error.
+    stdout(&env.lt(&["skill", "uninstall"]));
 }

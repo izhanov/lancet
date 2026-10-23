@@ -42,14 +42,20 @@ pub async fn run(g: &Global, args: Args) -> anyhow::Result<()> {
     tracing::debug!(mode = %args.mode, results = results.len(), took = ?start.elapsed(), "search done");
 
     if args.json {
-        for r in &mut results {
-            r.score = (r.score * 10_000.0).round() / 10_000.0;
-        }
+        round_scores(&mut results);
         println!("{}", serde_json::to_string_pretty(&results)?);
         return Ok(());
     }
     print_results(&results);
     Ok(())
+}
+
+/// Scores cut to 4 decimals for machine-readable output: more digits are
+/// noise that only costs bytes (and an agent's context).
+pub fn round_scores(results: &mut [SearchResult]) {
+    for r in results {
+        r.score = (r.score * 10_000.0).round() / 10_000.0;
+    }
 }
 
 fn print_results(results: &[SearchResult]) {

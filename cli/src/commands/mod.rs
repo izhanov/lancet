@@ -2,7 +2,9 @@
 
 pub mod eval;
 pub mod index;
+pub mod mcp;
 pub mod search;
+pub mod skill;
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -105,6 +107,7 @@ pub fn setup_logging(g: &Global) {
         .with_writer(std::io::stderr)
         .with_env_filter(filter)
         .with_target(false)
+        .with_ansi(std::env::var_os("NO_COLOR").is_none() && std::io::stderr().is_terminal())
         .init();
 }
 

@@ -28,6 +28,13 @@ enum Command {
     /// Measure search quality against golden sets of query → expected-file cases; no argument runs every
     /// set in the evals directory
     Eval(commands::eval::Args),
+    /// Serve the index to AI agents over MCP (stdio)
+    Mcp,
+    /// Manage the Claude Code skill that teaches AI agents to search with lt
+    Skill {
+        #[command(subcommand)]
+        action: commands::skill::Action,
+    },
 }
 
 #[tokio::main]
@@ -59,6 +66,8 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Reindex(args) => commands::index::run(g, &args.paths, true, false).await,
         Command::Search(args) => commands::search::run(g, args).await,
         Command::Eval(args) => commands::eval::run(g, args).await,
+        Command::Mcp => commands::mcp::run(g).await,
+        Command::Skill { action } => commands::skill::run(action),
     }
 }
 
