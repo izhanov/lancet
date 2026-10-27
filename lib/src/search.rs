@@ -141,10 +141,20 @@ fn parse_exclusions(query: &str) -> (String, Vec<String>) {
     };
     let query = strip(&EXCLUDE_PHRASE, query);
     let query = strip(&EXCLUDE_WORD, &query);
-    (
-        query.split_whitespace().collect::<Vec<_>>().join(" "),
-        exclude,
-    )
+    (squash_whitespace(&query), exclude)
+}
+
+/// Whitespace runs collapsed to one space, the ends trimmed, in one
+/// allocation.
+pub fn squash_whitespace(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for word in s.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out
 }
 
 /// An SQL predicate keeping only chunks that match no exclusion: a term in
@@ -174,6 +184,20 @@ mod tests {
     use crate::embed::{Fake, InputType};
     use crate::parse::Chunk;
     use crate::store::Document;
+
+    #[test]
+    fn squash_whitespace_cases() {
+        for (input, want) in [
+            ("", ""),
+            ("   ", ""),
+            ("one", "one"),
+            ("  two  words ", "two words"),
+            ("tab\tand\nnewline\r\n  runs", "tab and newline runs"),
+            ("нбсп\u{a0}тоже", "нбсп тоже"),
+        ] {
+            assert_eq!(squash_whitespace(input), want, "{input:?}");
+        }
+    }
 
     #[test]
     fn mode_from_str() {

@@ -15,6 +15,7 @@ use clap::{ArgAction, ValueEnum};
 use lancet_lib::config;
 use lancet_lib::embed::{Embedder, Fake, Ollama};
 use lancet_lib::parse::{Code, Registry};
+use lancet_lib::search::squash_whitespace;
 use lancet_lib::store::{OpenOptions, Store};
 
 /// Flags accepted by every command, each with a `LANCET_*` env twin.
@@ -166,7 +167,7 @@ pub fn pretty_path(path: &str) -> String {
 
 /// Text flattened to a single line of at most `max` characters.
 pub fn snippet(text: &str, max: usize) -> String {
-    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let flat = squash_whitespace(text);
     if flat.chars().count() <= max {
         return flat;
     }
