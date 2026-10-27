@@ -45,9 +45,9 @@ Next, in order:
    `.lancet.toml` (`db = "uscreen_2"`) found walking up from the working
    directory, like git finds `.git`; precedence flag > env > file > default.
    With it `lt mcp --about "code of the uscreen_2 Rails app"`, put into the
-   tool descriptions: today every server introduces itself as "the user's
-   notes", so an agent tells `lancet` from `lancet-uscreen` only by name;
-   the `lancet-search` skill should learn about extra `lancet-*` indexes.
+   tool descriptions: today the servers differ only by name and by the
+   database their instructions name; the `lancet-search` skill tells
+   `lancet` (notes) from `lancet-<repo>` (code) by that.
 3. A golden set for code (15–20 real questions about uscreen_2): does
    semantic search beat an agent with grep? Decides how far code goes.
    It also settles the 600-byte packs for code between definitions, tried
@@ -126,11 +126,7 @@ reference graph from the tags queries' `@reference.*` (`find_references`);
 smaller binaries beyond the `dist` profile's thin LTO (`lt` ~140 MB, its
 tar.gz ~55 MB: an xz asset would be ~32 MB but install.sh then needs xz on Linux;
 `panic = "abort"` saves ~25 MB of unwind tables and kills the MCP server on
-any panic); the `lancet-search` skill telling
-the agent to restate a question in the code's own terms, in English, before
-searching, or to send both the original and the restated query ("как
-пользователи меняют о себе инфу" misses both profile controllers in
-uscreen_2, "user edits own profile name avatar password" puts them first);
+any panic);
 search results saying which rankers matched (in hybrid a Russian query over
 code is vector only and tops out at 0.5, which reads as a weak match);
 rewriting queries inside `lt` (an LLM or synonyms), only if the skill rule

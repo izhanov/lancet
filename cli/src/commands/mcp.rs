@@ -3,6 +3,7 @@
 //! in the terminal. stdout belongs to JSON-RPC; logs go to stderr.
 
 use std::future::Future;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -24,7 +25,11 @@ const MAX_LIMIT: usize = 50;
 pub async fn run(g: &Global) -> anyhow::Result<()> {
     let store = g.open_store().await?;
     let embedder = g.embedder(&store).await?;
-    let server = Server::new(Arc::new(store), embedder);
+    let server = Server::new(
+        Arc::new(store),
+        embedder,
+        instructions(&std::path::absolute(&g.db)?),
+    );
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "mcp server started");
     let service = server.serve(rmcp::transport::stdio()).await?;
     let reason = service.waiting().await?;
@@ -36,7 +41,28 @@ pub async fn run(g: &Global) -> anyhow::Result<()> {
 pub struct Server {
     store: Arc<Store>,
     embedder: Arc<dyn Embedder>,
+    instructions: String,
     tool_router: ToolRouter<Self>,
+}
+
+/// What the agent reads about this server on connecting. Every Lancet server
+/// has the same tools, so the database path is what tells them apart.
+fn instructions(db: &Path) -> String {
+    let db = db.display();
+    let skill = if super::skill::missing() {
+        format!(
+            "The {name} skill explains when to search which Lancet index; it is not \
+             installed: suggest the user run `lt skill install`.",
+            name = super::skill::NAME
+        )
+    } else {
+        format!("Follow the {} skill.", super::skill::NAME)
+    };
+    format!(
+        "Lancet index of the database {db}: search it by meaning and by exact words before \
+         reading or grepping blindly. {skill} The server is read-only: to bring the index up \
+         to date, the user runs `lt --db {db} index <paths>` in a terminal."
+    )
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -64,10 +90,11 @@ struct IndexedFile {
 
 #[tool_router]
 impl Server {
-    pub fn new(store: Arc<Store>, embedder: Arc<dyn Embedder>) -> Self {
+    pub fn new(store: Arc<Store>, embedder: Arc<dyn Embedder>, instructions: String) -> Self {
         Self {
             store,
             embedder,
+            instructions,
             tool_router: Self::tool_router(),
         }
     }
@@ -140,6 +167,7 @@ impl ServerHandler for Server {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("lancet", env!("CARGO_PKG_VERSION")))
+            .with_instructions(self.instructions.clone())
     }
 }
 

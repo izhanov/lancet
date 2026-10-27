@@ -49,6 +49,17 @@ pub fn run(action: Action) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Whether to suggest `lt skill install`: Claude Code is set up for this
+/// user (`~/.claude` exists) and the skill is not installed there.
+pub fn missing() -> bool {
+    dir().is_ok_and(|dir| {
+        dir.parent()
+            .and_then(|skills| skills.parent())
+            .is_some_and(|claude| claude.is_dir())
+            && !dir.join("SKILL.md").is_file()
+    })
+}
+
 /// `~/.claude/skills/lancet-search`.
 fn dir() -> anyhow::Result<PathBuf> {
     let home = std::env::home_dir().context("cannot locate the home directory")?;

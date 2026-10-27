@@ -159,7 +159,10 @@ The first command registers the MCP server: agents get `search_notes`,
 `list_files` and `index_status` (`mcp__lancet__*`) in every new session. The
 server is read-only; indexing stays in the terminal. The second installs the
 `lancet-search` skill into `~/.claude/skills`, which teaches agents to search
-the index before reading files blindly. To make them reach for it on their
+the index before reading files blindly, and to ask the right server: notes
+from `lancet`, a repository's code from its `lancet-<repo>`. Each server's
+instructions name its database; until the skill is installed, they and
+`lt index` suggest `lt skill install`. To make agents reach for it on their
 own, add to `~/.claude/CLAUDE.md`:
 
 ```

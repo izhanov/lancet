@@ -81,5 +81,8 @@ pub async fn run(g: &Global, roots: &[PathBuf], reset: bool, force: bool) -> any
             sum.files + sum.failed
         );
     }
+    if !g.quiet && super::skill::missing() {
+        println!("\ntip: `lt skill install` teaches Claude Code agents to search this index");
+    }
     Ok(())
 }

@@ -55,6 +55,11 @@ impl Env {
     /// `tools/call` requests. Returns each call's text payload and isError,
     /// in order; closing stdin ends the server.
     fn mcp(&self, calls: &[serde_json::Value]) -> Vec<(String, bool)> {
+        self.mcp_session(calls).1
+    }
+
+    /// Like `mcp`, and also returns the server's instructions.
+    fn mcp_session(&self, calls: &[serde_json::Value]) -> (String, Vec<(String, bool)>) {
         let mut child = self
             .command(&["mcp"])
             .stdin(Stdio::piped())
@@ -78,22 +83,25 @@ impl Env {
         drop(stdin);
 
         let out = stdout(&child.wait_with_output().unwrap());
+        let mut instructions = String::new();
         let mut results = vec![None; calls.len()];
         for line in out.lines() {
             let msg: serde_json::Value = serde_json::from_str(line).unwrap();
             let id = msg["id"].as_u64().unwrap() as usize;
             if id == 0 {
                 assert_eq!(msg["result"]["serverInfo"]["name"], "lancet", "{line}");
+                instructions = msg["result"]["instructions"].as_str().unwrap().to_string();
                 continue;
             }
             let result = &msg["result"];
             let text = result["content"][0]["text"].as_str().unwrap().to_string();
             results[id - 1] = Some((text, result["isError"] == true));
         }
-        results
+        let results = results
             .into_iter()
             .map(|r| r.expect("a response to every call"))
-            .collect()
+            .collect();
+        (instructions, results)
     }
 }
 
@@ -270,6 +278,38 @@ fn skill_install_show_uninstall() {
     assert!(!skill.parent().unwrap().exists());
     // Removing what is not there is not an error.
     stdout(&env.lt(&["skill", "uninstall"]));
+}
+
+#[test]
+fn skill_hints() {
+    let env = Env::new();
+    // Without Claude Code there is nothing to suggest.
+    assert!(!stdout(&env.lt(&["index", "notes"])).contains("lt skill install"));
+
+    std::fs::create_dir(env.dir.path().join(".claude")).unwrap();
+    env.write("notes/todo.md", "# Todo\n\nShip it.\n");
+    let out = stdout(&env.lt(&["index", "notes"]));
+    assert!(out.contains("tip: `lt skill install`"), "{out}");
+    let (instructions, _) = env.mcp_session(&[]);
+    let db = env.dir.path().join("db.lance");
+    assert!(
+        instructions.contains(&format!("`lt --db {} index <paths>`", db.display())),
+        "{instructions}"
+    );
+    assert!(
+        instructions.contains("run `lt skill install`"),
+        "{instructions}"
+    );
+
+    stdout(&env.lt(&["skill", "install"]));
+    env.write("notes/todo.md", "# Todo\n\nShip it today.\n");
+    let out = stdout(&env.lt(&["index", "notes"]));
+    assert!(!out.contains("lt skill install"), "{out}");
+    let (instructions, _) = env.mcp_session(&[]);
+    assert!(
+        instructions.contains("Follow the lancet-search skill."),
+        "{instructions}"
+    );
 }
 
 /// Installs the Ruby plugin the way `lt lang add ruby` lays it out, with
