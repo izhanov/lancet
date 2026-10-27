@@ -15,12 +15,14 @@ license = "MIT"
 strip = true
 
 # Release assets only (see .github/workflows/release.yml): lt shrinks from
-# ~210 to ~125 MB, its tar.gz from ~80 to ~55 MB. A clean build takes
-# ~15 min on an M5 and every change relinks the whole binary, so local
-# `--release` builds stay without it.
+# ~210 to ~140 MB, its tar.gz from ~80 to ~55 MB. Thin, not fat: fat LTO
+# saves 1 MB of tar.gz more but runs ~13 min on an M5 instead of ~8, and on
+# CI it killed the 16 GB linux arm64 runner and starved the macOS ones.
+# Thin still peaks at ~11 GB and every change relinks the whole binary, so
+# local `--release` builds stay without it.
 [profile.dist]
 inherits = "release"
-lto = "fat"
+lto = "thin"
 codegen-units = 1
 
 # Versions only, with default features off: each crate names the features
