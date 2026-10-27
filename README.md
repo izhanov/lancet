@@ -34,7 +34,13 @@ index or search in `vector` / `hybrid` mode. `--mode text` works without it.
 
 `bge-m3` is multilingual, so Russian and English notes live in one index. A
 different model works too (`--embed-model`), but an index is bound to the
-model that built it: after switching, run `lt reindex <path>`.
+model that built it: after switching, run `lt reindex <path>`. Many retrieval
+models expect a prompt before a query and before a passage
+(`search_query: ` / `search_document: ` for `nomic-embed-text`); `lt` adds
+them for the models listed in `lib/src/embed/models.rs` and embeds any other
+model's texts as they are, with a warning. For English-only code,
+`granite-embedding:30m` (62 MB) or `nomic-embed-text` (274 MB) keep the
+download small.
 
 ## Quick start
 

@@ -99,6 +99,12 @@ Next, in order:
    - A faster model, only by eval: quantized `bge-m3` (Q8 instead of F16),
      a smaller multilingual model; MLX / Core ML instead of llama.cpp is
      a hypothesis to measure; several Ollama URLs for remote GPUs.
+     Prompt profiles per model are in (`lib/src/embed/models.rs`). First
+     eval, 18 English queries over basecamp/fizzy (2026-10-27), recall@5
+     vector / hybrid: bge-m3 0.78 / 0.67, embeddinggemma 0.72 / 0.67
+     (0.61 / 0.67 without prompts), nomic-embed-text 0.61 / 0.67 (0.50 /
+     0.67), granite-embedding:30m 0.61 / 0.61, text only 0.50. Hybrid
+     falling below vector for bge-m3 is an FTS fusion question.
 6. The rest of the CLI: `list`, `flush`, `evals`, `setup`, `update`.
 7. `lt-server` and tenant databases on S3.
 

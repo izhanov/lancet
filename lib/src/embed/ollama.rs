@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use super::models::{self, Profile};
 use super::{Embedder, InputType};
 use crate::{Error, Result};
 
@@ -11,6 +12,7 @@ use crate::{Error, Result};
 pub struct Ollama {
     base_url: String,
     model: String,
+    profile: Option<&'static Profile>, // prompts before queries and passages
     client: reqwest::Client,
 
     timeout: Duration, // per-request deadline
@@ -37,9 +39,17 @@ impl Ollama {
     /// The generous per-request timeout covers the first call loading the
     /// model into memory.
     pub fn new(base_url: &str, model: &str) -> Self {
+        let profile = models::profile(model);
+        if profile.is_none() {
+            tracing::warn!(
+                model,
+                "no prompt profile for this model, queries and passages are embedded as is"
+            );
+        }
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             model: model.to_string(),
+            profile,
             client: reqwest::Client::new(),
             timeout: Duration::from_secs(5 * 60),
             attempts: 3,
@@ -133,9 +143,18 @@ fn retryable(err: &Error) -> bool {
 impl Embedder for Ollama {
     /// Slices texts into batches: a whole book in one request kills Ollama's
     /// runner, and a failed retry then re-sends only the batch that broke,
-    /// not everything before it. `/api/embed` has no notion of [`InputType`], and
-    /// bge-m3 embeds queries and passages alike, so the input type is not used.
-    async fn embed(&self, texts: &[String], _input: InputType) -> Result<Vec<Vec<f32>>> {
+    /// not everything before it. `/api/embed` has no notion of [`InputType`],
+    /// so the model's prompt for it goes in front of each text.
+    async fn embed(&self, texts: &[String], input: InputType) -> Result<Vec<Vec<f32>>> {
+        let prompt = self.profile.map_or("", |p| p.prompt(input));
+        let prompted: Vec<String>;
+        let texts = if prompt.is_empty() {
+            texts
+        } else {
+            prompted = texts.iter().map(|t| format!("{prompt}{t}")).collect();
+            &prompted
+        };
+
         let mut vectors = Vec::with_capacity(texts.len());
         for batch in texts.chunks(self.batch) {
             vectors.extend(self.embed_batch(batch).await?);
@@ -143,8 +162,13 @@ impl Embedder for Ollama {
         Ok(vectors)
     }
 
+    /// Prompts shape the vectors, so they are part of the id; models
+    /// without them keep the bare id their databases were stamped with.
     fn id(&self) -> String {
-        format!("ollama/{}", self.model)
+        match self.profile {
+            Some(p) if !p.is_symmetric() => format!("ollama/{}@{}", self.model, p.fingerprint()),
+            _ => format!("ollama/{}", self.model),
+        }
     }
 }
 
