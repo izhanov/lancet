@@ -64,6 +64,11 @@ the index on the next `lt index` of their directory.
 `-word` and `-"a phrase"` in a query exclude results containing them;
 `--exclude-path <fragment>` drops results by file path.
 
+**Keep code and notes in separate databases.** Notes go to the default
+database; each code repository gets its own `--db` (see
+[Indexing a repository](#indexing-a-repository)). In one database the code
+chunks outnumber the notes and fill the results.
+
 ## Source code
 
 Code is chunked by symbol: a method, class or module that fits is one
