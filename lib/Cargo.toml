@@ -9,23 +9,27 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 csv.workspace = true
-futures.workspace = true
+futures = { workspace = true, features = ["std"] }
 ignore.workspace = true
-lancedb.workspace = true
+# "remote": since 0.38 lancedb does not compile without it (Error::Http is used ungated in job.rs)
+lancedb = { workspace = true, features = ["remote"] }
 quick-xml.workspace = true
-regex.workspace = true
-reqwest.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+# "unicode": \s and \S in the minus-operator patterns cover non-ASCII spaces
+regex = { workspace = true, features = ["std", "perf", "unicode"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+serde = { workspace = true, features = ["std", "derive"] }
+serde_json = { workspace = true, features = ["std"] }
 serde_norway.workspace = true
-sha2.workspace = true
-thiserror.workspace = true
-toml.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-tree-sitter.workspace = true
-zip.workspace = true
+sha2 = { workspace = true, features = ["std"] }
+thiserror = { workspace = true, features = ["std"] }
+toml = { workspace = true, features = ["parse", "display", "serde"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing = { workspace = true, features = ["std"] }
+# "wasm": language plugins ship their grammar as WebAssembly (see src/lang.rs)
+tree-sitter = { workspace = true, features = ["std", "wasm"] }
+zip = { workspace = true, features = ["deflate"] }
 
 [dev-dependencies]
-tempfile.workspace = true
+tempfile = { workspace = true, features = ["getrandom"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wiremock.workspace = true
