@@ -3837,15 +3837,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lancet-server"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "lancet-lib",
- "tokio",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

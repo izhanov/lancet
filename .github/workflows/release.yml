@@ -51,18 +51,13 @@ jobs:
           key: ${{ matrix.platform }}
 
       - name: Build
-        run: cargo build --profile dist --locked -p lancet-cli -p lancet-server
+        run: cargo build --profile dist --locked -p lancet-cli
 
-      # Two assets: install.sh (and later `lt update`) look for
-      # lancet_<platform>.tar.gz; the HTTP server ships alongside.
+      # install.sh (and later `lt update`) look for lancet_<platform>.tar.gz.
       - name: Package
-        run: |
-          tar -C target/dist -czf lancet_${{ matrix.platform }}.tar.gz lt
-          tar -C target/dist -czf lancet-server_${{ matrix.platform }}.tar.gz lt-server
+        run: tar -C target/dist -czf lancet_${{ matrix.platform }}.tar.gz lt
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            lancet_${{ matrix.platform }}.tar.gz
-            lancet-server_${{ matrix.platform }}.tar.gz
+          files: lancet_${{ matrix.platform }}.tar.gz
