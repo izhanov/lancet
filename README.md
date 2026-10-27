@@ -76,9 +76,17 @@ straight from the tree-sitter grammar's GitHub repository.
 lt lang add ruby --ext .rake --ext .gemspec   # tree-sitter/tree-sitter-ruby, latest release
 lt lang add python
 lt lang add someone/tree-sitter-elixir@v0.3.0  # any repository, pinned tag
+lt lang add tree-sitter-grammars/tree-sitter-yaml
+lt lang add embedded-template                  # ERB (.erb, also .ejs and .etlua)
 lt lang list
 lt index ~/code/my-app
 ```
+
+A grammar without a tags query has no symbols to chunk by, so its files
+follow the syntax tree alone. YAML comes out well: a block too big for one
+chunk splits by key, and the keys are the trail (`en > account > profiles`).
+ERB templates are packed in source order without a trail, since
+embedded-template sees `<% %>` tags but not the HTML around them.
 
 ### Indexing a repository
 
@@ -99,6 +107,10 @@ Index the directories you ask questions about, not the whole repository:
   code, fixtures and vendored libraries are noise in the results and cost
   embedding time. In a Rails app, `app` and `lib` are about half the Ruby
   files; `db/migrate` and `spec` are the other half.
+- **Locales in one language.** A Rails app's `config/locales` holds every
+  string once per language: in one app English was 4% of 5.8 MB. Pass the
+  English files as roots (`$(find config/locales -name 'en.yml' -o -name
+  '*.en.yml')`) rather than the directory.
 - **Tests are a judgment call.** Specs answer "how is this used", but they
   repeat the code they test and dilute the results; add them later as a
   separate root if you miss them.

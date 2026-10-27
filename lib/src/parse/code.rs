@@ -307,14 +307,86 @@ fn line_start(source: &str, byte: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lang::ruby_for_tests;
+    use crate::lang::{erb_for_tests, ruby_for_tests, yaml_for_tests};
 
     fn chunks(source: &str) -> Vec<(String, String)> {
-        chunk(ruby_for_tests(), source)
+        chunks_in(ruby_for_tests(), source)
+    }
+
+    fn chunks_in(lang: &Language, source: &str) -> Vec<(String, String)> {
+        chunk(lang, source)
             .unwrap()
             .into_iter()
             .map(|c| (c.section, c.text))
             .collect()
+    }
+
+    #[test]
+    fn small_yaml_is_packed_like_dsl() {
+        let source = "production:\n  adapter: trilogy\n  host: db\n";
+
+        assert_eq!(
+            chunks_in(yaml_for_tests(), source),
+            [("".into(), source.trim_end().into())]
+        );
+    }
+
+    #[test]
+    fn yaml_keys_are_the_trail() {
+        let keys = |prefix: &str, n: usize| -> String {
+            (0..n)
+                .map(|i| format!("      {prefix}_{i}: Some interface text number {i}\n"))
+                .collect()
+        };
+        let source = format!(
+            "en:\n  account:\n    profiles:\n{}    purchases:\n{}  billing:\n    title: Billing\n",
+            keys("profile", 40),
+            keys("purchase", 40)
+        );
+
+        let got = chunks_in(yaml_for_tests(), &source);
+
+        let sections: Vec<&str> = got.iter().map(|(s, _)| s.as_str()).collect();
+        assert!(
+            sections.contains(&"en > account > profiles"),
+            "{sections:?}"
+        );
+        assert!(
+            sections.contains(&"en > account > purchases"),
+            "{sections:?}"
+        );
+        let profiles: String = got
+            .iter()
+            .filter(|(s, _)| s == "en > account > profiles")
+            .map(|(_, t)| t.as_str())
+            .collect();
+        assert!(profiles.contains("profile_0:") && profiles.contains("profile_39:"));
+        assert!(got.iter().all(|(_, t)| t.len() <= MAX_CHUNK_CHARS));
+    }
+
+    #[test]
+    fn erb_is_packed_in_source_order() {
+        let row = |i: usize| {
+            format!(
+                "  <% if card.closed? %>\n    <li><%= link_to card.title, card %> {i}</li>\n  <% end %>\n"
+            )
+        };
+        let source = format!(
+            "<ul class=\"cards\">\n{}</ul>\n",
+            (0..40).map(row).collect::<String>()
+        );
+
+        let got = chunks_in(erb_for_tests(), &source);
+
+        assert!(got.len() > 1, "a long template splits");
+        assert!(
+            got.iter()
+                .all(|(s, t)| s.is_empty() && t.len() <= MAX_CHUNK_CHARS)
+        );
+        let text: String = got.iter().map(|(_, t)| t.as_str()).collect();
+        for i in [0, 20, 39] {
+            assert!(text.contains(&format!("card %> {i}</li>")), "row {i} kept");
+        }
     }
 
     #[test]

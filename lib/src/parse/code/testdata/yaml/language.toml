@@ -1,0 +1,6 @@
+# Test fixture: the plugin `lt lang add tree-sitter-grammars/tree-sitter-yaml`
+# installs from its v0.7.2 release; the grammar publishes no tags query.
+name = "yaml"
+extensions = [".yml", ".yaml"]
+source = "tree-sitter-grammars/tree-sitter-yaml@v0.7.2"
+grammar_sha256 = "0a0e5ebcfeb0b2bf272d071396eeed107b2c4b2617b69d5959b13f78b357a4d6"

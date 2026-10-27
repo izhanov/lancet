@@ -60,7 +60,10 @@ pub struct Language {
 impl Language {
     /// Loads the plugin in `dir`. Patterns of the tags query that mark no
     /// definition (`@reference.call` and the like) are switched off: they
-    /// match nearly every identifier and chunking does not need them.
+    /// match nearly every identifier and chunking does not need them. An
+    /// empty query is fine (YAML, ERB: languages with no symbols, chunked
+    /// along the syntax tree alone); one with patterns but no definition is
+    /// a mistake that would quietly lose chunking by symbol.
     fn load(dir: &Path) -> Result<Self> {
         let failed = |message: String| Error::Language {
             path: dir.display().to_string(),
@@ -85,7 +88,7 @@ impl Language {
             .filter(|(_, name)| name.starts_with("definition."))
             .map(|(i, _)| i)
             .collect();
-        if definitions.is_empty() {
+        if definitions.is_empty() && tags.pattern_count() > 0 {
             return Err(failed(format!("{TAGS} has no @definition.* captures")));
         }
         for pattern in 0..tags.pattern_count() {
@@ -284,50 +287,57 @@ pub async fn add(
     })?;
 
     let mut installed = Vec::new();
-    for grammar in &config.grammars {
-        if !valid_name(&grammar.name) {
+    for (grammar, name, file_types) in merge_entries(&config.grammars) {
+        if !valid_name(&name) {
             return Err(failed(format!("bad grammar name {:?}", grammar.name)));
         }
         let base = grammar.path.as_deref().unwrap_or(".").trim_matches('/');
-        let tags_files: Vec<String> = match &grammar.tags {
-            Some(OneOrMany::One(f)) => vec![f.clone()],
-            Some(OneOrMany::Many(fs)) => fs.clone(),
-            None if base == "." || base.is_empty() => vec!["queries/tags.scm".into()],
-            None => vec![format!("{base}/queries/tags.scm")],
+        // A tags query the grammar names must exist; the default one may
+        // not, and then chunks follow the syntax tree alone.
+        let (tags_files, optional): (Vec<String>, bool) = match &grammar.tags {
+            Some(OneOrMany::One(f)) => (vec![f.clone()], false),
+            Some(OneOrMany::Many(fs)) => (fs.clone(), false),
+            None if base == "." || base.is_empty() => (vec!["queries/tags.scm".into()], true),
+            None => (vec![format!("{base}/queries/tags.scm")], true),
         };
         let mut tags = String::new();
         for file in &tags_files {
             let file = file.trim_start_matches("./");
             let url = format!("{}/{repo}/{tag}/{file}", gh.raw);
-            let body = gh.get(&url).await?.ok_or_else(|| {
-                failed(format!(
-                    "{} has no tags query ({file}); write one into <languages>/{}/{TAGS}",
-                    grammar.name, grammar.name
-                ))
-            })?;
-            tags.push_str(&String::from_utf8_lossy(&body));
-            tags.push('\n');
+            match gh.get(&url).await? {
+                Some(body) => {
+                    tags.push_str(&String::from_utf8_lossy(&body));
+                    tags.push('\n');
+                }
+                None if optional => tracing::warn!(
+                    language = %name,
+                    "no tags query ({file}): chunks follow the syntax tree, without symbols"
+                ),
+                None => {
+                    return Err(failed(format!(
+                        "{name} has no tags query ({file}); write one into <languages>/{name}/{TAGS}"
+                    )));
+                }
+            }
         }
         let url = format!(
-            "{}/{repo}/releases/download/{tag}/tree-sitter-{}.wasm",
-            gh.web, grammar.name
+            "{}/{repo}/releases/download/{tag}/tree-sitter-{name}.wasm",
+            gh.web
         );
-        let wasm = gh.get(&url).await?.ok_or_else(|| {
-            failed(format!(
-                "release {tag} has no tree-sitter-{}.wasm",
-                grammar.name
-            ))
-        })?;
+        let wasm = gh
+            .get(&url)
+            .await?
+            .ok_or_else(|| failed(format!("release {tag} has no tree-sitter-{name}.wasm")))?;
 
         let mut extensions: Vec<String> = Vec::new();
-        for ext in grammar.file_types.iter().chain(extra_extensions) {
+        for ext in file_types.iter().chain(extra_extensions) {
             let ext = format!(".{}", ext.trim_start_matches('.').to_lowercase());
             if !extensions.contains(&ext) {
                 extensions.push(ext);
             }
         }
         let manifest = Manifest {
-            name: grammar.name.clone(),
+            name,
             extensions,
             source: Some(format!("{repo}@{tag}")),
             grammar_sha256: Some(format!("{:x}", Sha256::digest(&wasm))),
@@ -392,6 +402,22 @@ fn read_manifest(dir: &Path) -> Result<Manifest> {
     })
 }
 
+/// One plugin per grammar, with the name its module is compiled under.
+/// tree-sitter-embedded-template lists `embedded-template` three times,
+/// once per file type, while its module is `embedded_template`: the C
+/// symbol and the release asset use underscores.
+fn merge_entries(entries: &[GrammarEntry]) -> Vec<(&GrammarEntry, String, Vec<String>)> {
+    let mut merged: Vec<(&GrammarEntry, String, Vec<String>)> = Vec::new();
+    for entry in entries {
+        let name = entry.name.replace('-', "_");
+        match merged.iter_mut().find(|(_, n, _)| *n == name) {
+            Some((_, _, types)) => types.extend(entry.file_types.iter().cloned()),
+            None => merged.push((entry, name, entry.file_types.clone())),
+        }
+    }
+    merged
+}
+
 fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name
@@ -415,9 +441,32 @@ pub(crate) fn ruby_for_tests() -> &'static Language {
     &RUBY
 }
 
+/// The YAML plugin fixture: a grammar without a tags query.
+#[cfg(test)]
+pub(crate) fn yaml_for_tests() -> &'static Language {
+    static YAML: LazyLock<Language> =
+        LazyLock::new(|| Language::load(&fixture_dir("yaml")).unwrap());
+    &YAML
+}
+
+/// The ERB plugin fixture (tree-sitter-embedded-template), no tags query.
+#[cfg(test)]
+pub(crate) fn erb_for_tests() -> &'static Language {
+    static ERB: LazyLock<Language> =
+        LazyLock::new(|| Language::load(&fixture_dir("embedded_template")).unwrap());
+    &ERB
+}
+
 #[cfg(test)]
 pub(crate) fn ruby_fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src/parse/code/testdata/ruby")
+    fixture_dir("ruby")
+}
+
+#[cfg(test)]
+fn fixture_dir(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/parse/code/testdata")
+        .join(name)
 }
 
 #[cfg(test)]
@@ -610,5 +659,56 @@ mod tests {
         std::fs::write(plugin.join(GRAMMAR), b"not wasm").unwrap();
         let err = load_all(dir.path()).err().unwrap().to_string();
         assert!(err.contains(GRAMMAR), "{err}");
+    }
+
+    #[test]
+    fn loads_a_plugin_without_a_tags_query() {
+        for (lang, dir) in [
+            (yaml_for_tests(), "yaml"),
+            (erb_for_tests(), "embedded_template"),
+        ] {
+            assert_eq!(lang.manifest.name, dir);
+            assert_eq!(lang.tags.pattern_count(), 0);
+            let wasm = std::fs::read(fixture_dir(dir).join(GRAMMAR)).unwrap();
+            assert_eq!(
+                lang.manifest.grammar_sha256,
+                Some(format!("{:x}", Sha256::digest(wasm)))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn adds_a_grammar_without_a_tags_query() {
+        // tree-sitter-embedded-template's tree-sitter.json, shortened: one
+        // entry per file type, the name with a hyphen.
+        let config = serde_json::json!({"grammars": [
+            {"name": "embedded-template", "path": ".", "file-types": ["ejs"]},
+            {"name": "embedded-template", "path": ".", "file-types": ["erb"]},
+        ]});
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/o/r/v1/tree-sitter.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(config.to_string()))
+            .mount(&server)
+            .await;
+        let wasm = std::fs::read(fixture_dir("embedded_template").join(GRAMMAR)).unwrap();
+        Mock::given(method("GET"))
+            .and(path(
+                "/o/r/releases/download/v1/tree-sitter-embedded_template.wasm",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(wasm))
+            .mount(&server)
+            .await;
+        let gh = GitHub::with_base(&server.uri(), &server.uri());
+        let dir = tempfile::tempdir().unwrap();
+
+        let added = add(dir.path(), "o/r@v1", &[], &gh).await.unwrap();
+
+        assert_eq!(added.len(), 1, "entries of one grammar are one plugin");
+        assert_eq!(added[0].name, "embedded_template");
+        assert_eq!(added[0].extensions, [".ejs", ".erb"]);
+        let tags = std::fs::read_to_string(dir.path().join("embedded_template").join(TAGS));
+        assert_eq!(tags.unwrap().trim(), "");
+        assert_eq!(load_all(dir.path()).unwrap().len(), 1);
     }
 }

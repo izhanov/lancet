@@ -1,0 +1,6 @@
+# Test fixture: the plugin `lt lang add embedded-template` installs from
+# tree-sitter/tree-sitter-embedded-template@v0.25.0; no tags query.
+name = "embedded_template"
+extensions = [".ejs", ".erb", ".etlua"]
+source = "tree-sitter/tree-sitter-embedded-template@v0.25.0"
+grammar_sha256 = "d15bbf3cb90901d0372b5599761c7a1ada344a0f11573c173ace7042636a6174"
