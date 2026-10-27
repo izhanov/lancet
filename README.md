@@ -161,9 +161,9 @@ server is read-only; indexing stays in the terminal. The second installs the
 `lancet-search` skill into `~/.claude/skills`, which teaches agents to search
 the index before reading files blindly, and to ask the right server: notes
 from `lancet`, a repository's code from its `lancet-<repo>`. Each server's
-instructions name its database; until the skill is installed, they and
-`lt index` suggest `lt skill install`. To make agents reach for it on their
-own, add to `~/.claude/CLAUDE.md`:
+instructions name its database. `install.sh` suggests `lt skill install`
+when Claude Code is set up and the skill is not. To make agents reach for it
+on their own, add to `~/.claude/CLAUDE.md`:
 
 ```
 Before tasks involving my notes, docs or style guides, use the lancet-search skill.

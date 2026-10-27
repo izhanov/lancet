@@ -281,30 +281,17 @@ fn skill_install_show_uninstall() {
 }
 
 #[test]
-fn skill_hints() {
+fn mcp_instructions() {
     let env = Env::new();
-    // Without Claude Code there is nothing to suggest.
-    assert!(!stdout(&env.lt(&["index", "notes"])).contains("lt skill install"));
-
-    std::fs::create_dir(env.dir.path().join(".claude")).unwrap();
-    env.write("notes/todo.md", "# Todo\n\nShip it.\n");
-    let out = stdout(&env.lt(&["index", "notes"]));
-    assert!(out.contains("tip: `lt skill install`"), "{out}");
     let (instructions, _) = env.mcp_session(&[]);
     let db = env.dir.path().join("db.lance");
     assert!(
         instructions.contains(&format!("`lt --db {} index <paths>`", db.display())),
         "{instructions}"
     );
-    assert!(
-        instructions.contains("run `lt skill install`"),
-        "{instructions}"
-    );
+    assert!(!instructions.contains("skill"), "{instructions}");
 
     stdout(&env.lt(&["skill", "install"]));
-    env.write("notes/todo.md", "# Todo\n\nShip it today.\n");
-    let out = stdout(&env.lt(&["index", "notes"]));
-    assert!(!out.contains("lt skill install"), "{out}");
     let (instructions, _) = env.mcp_session(&[]);
     assert!(
         instructions.contains("Follow the lancet-search skill."),

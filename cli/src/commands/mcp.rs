@@ -49,18 +49,14 @@ pub struct Server {
 /// has the same tools, so the database path is what tells them apart.
 fn instructions(db: &Path) -> String {
     let db = db.display();
-    let skill = if super::skill::missing() {
-        format!(
-            "The {name} skill explains when to search which Lancet index; it is not \
-             installed: suggest the user run `lt skill install`.",
-            name = super::skill::NAME
-        )
+    let skill = if super::skill::installed() {
+        format!(" Follow the {} skill.", super::skill::NAME)
     } else {
-        format!("Follow the {} skill.", super::skill::NAME)
+        String::new()
     };
     format!(
         "Lancet index of the database {db}: search it by meaning and by exact words before \
-         reading or grepping blindly. {skill} The server is read-only: to bring the index up \
+         reading or grepping blindly.{skill} The server is read-only: to bring the index up \
          to date, the user runs `lt --db {db} index <paths>` in a terminal."
     )
 }
