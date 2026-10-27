@@ -69,5 +69,5 @@ echo
 echo "next:"
 command -v ollama >/dev/null 2>&1 || echo "  install Ollama: https://ollama.com/download"
 command -v pdftotext >/dev/null 2>&1 || echo "  for PDFs install Poppler: brew install poppler (or apt install poppler-utils)"
-echo "  ollama pull bge-m3"
+echo "  ollama pull nomic-embed-text   # bge-m3 for notes in other languages"
 echo "  lt index ~/notes"

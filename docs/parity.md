@@ -105,6 +105,16 @@ Next, in order:
      (0.61 / 0.67 without prompts), nomic-embed-text 0.61 / 0.67 (0.50 /
      0.67), granite-embedding:30m 0.61 / 0.61, text only 0.50. Hybrid
      falling below vector for bge-m3 is an FTS fusion question.
+     Second eval the same day, those 18 plus the 3 English cases of the
+     notes golden set, hits in top 5 out of 21, hybrid / vector: bge-m3
+     (1.2 GB) 14 / 16, mxbai-embed-large (669 MB) 14 / 18, qwen3-embedding
+     0.6b (639 MB) 14 / 14, embeddinggemma (621 MB) 14 / 15,
+     nomic-embed-text (274 MB) 15 / 14, snowflake-arctic-embed 110m
+     (218 MB) 14 / 16, 33m (67 MB) 14 / 15, granite-embedding:30m (62 MB)
+     12 / 12; all-minilm (45 MB) 8 / 11 of Fizzy's 18. Only bge-m3,
+     embeddinggemma and qwen3 found a Russian notes query. So the default
+     for a new database is nomic-embed-text, and a database keeps the model
+     it was built with.
 6. The rest of the CLI: `list`, `flush`, `evals`, `setup`, `update`.
 7. `lt-server` and tenant databases on S3.
 
@@ -152,7 +162,7 @@ Global flags, each with an env twin (`QAZYNA_*` in qazyna, `LANCET_*` in Lancet)
 - [x] `--store` (`LANCET_STORE`) — default `lance`
 - [x] `--embedder` (`LANCET_EMBEDDER`) — default `ollama`; `fake` for tests
 - [x] `--ollama-url` (`LANCET_OLLAMA_URL`) — default `http://localhost:11434`
-- [x] `--embed-model` (`LANCET_EMBED_MODEL`) — default `bge-m3`
+- [x] `--embed-model` (`LANCET_EMBED_MODEL`) — default: the database's own model, `nomic-embed-text` for a new one
 - [x] `--fresh-reads` (`LANCET_FRESH_READS`) — default on; off pins the table version current at startup
 - [ ] `--tenant` (`LANCET_TENANT`) — overrides `--db` with `<tenants-dir>/<tenant>/db.lance`
 - [ ] `--tenants-dir` (`LANCET_TENANTS_DIR`) — local directory or `s3://bucket/prefix`

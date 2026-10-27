@@ -22,7 +22,9 @@ use super::Global;
 const MAX_LIMIT: usize = 50;
 
 pub async fn run(g: &Global) -> anyhow::Result<()> {
-    let server = Server::new(Arc::new(g.open_store().await?), g.embedder());
+    let store = g.open_store().await?;
+    let embedder = g.embedder(&store).await?;
+    let server = Server::new(Arc::new(store), embedder);
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "mcp server started");
     let service = server.serve(rmcp::transport::stdio()).await?;
     let reason = service.waiting().await?;

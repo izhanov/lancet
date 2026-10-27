@@ -6,6 +6,11 @@ use super::models::{self, Profile};
 use super::{Embedder, InputType};
 use crate::{Error, Result};
 
+/// The model a new database is built with: English, 274 MB. On English
+/// code and notes it searched as well as the 1.2 GB bge-m3 (docs/parity.md,
+/// step 5); bge-m3 stays the choice for other languages.
+pub const DEFAULT_MODEL: &str = "nomic-embed-text";
+
 /// Embeds texts via a local Ollama server (POST /api/embed).
 /// Transient failures (network errors, 5xx) are retried with backoff;
 /// client errors like an unknown model are not.
@@ -170,6 +175,16 @@ impl Embedder for Ollama {
             _ => format!("ollama/{}", self.model),
         }
     }
+}
+
+/// The model behind an [`Ollama`] id stored in a database, so a database
+/// keeps its own model whatever the default is: `ollama/bge-m3` and
+/// `ollama/nomic-embed-text@30757326` give `bge-m3` and `nomic-embed-text`.
+/// `None` for another embedder's id.
+pub fn model_from_id(id: &str) -> Option<&str> {
+    let model = id.strip_prefix("ollama/")?;
+    let model = model.rsplit_once('@').map_or(model, |(model, _)| model);
+    (!model.is_empty()).then_some(model)
 }
 
 #[cfg(test)]
@@ -394,5 +409,36 @@ mod tests {
             Ollama::new("http://x", "nomic-embed-text:v1.5").id(),
             format!("ollama/nomic-embed-text:v1.5@{fingerprint}")
         );
+    }
+
+    #[test]
+    fn model_from_id_cases() {
+        for (id, want) in [
+            ("ollama/bge-m3", Some("bge-m3")),
+            ("ollama/nomic-embed-text@30757326", Some("nomic-embed-text")),
+            (
+                "ollama/granite-embedding:30m",
+                Some("granite-embedding:30m"),
+            ),
+            (
+                "ollama/hf.co/x/bge-m3-GGUF:Q8_0",
+                Some("hf.co/x/bge-m3-GGUF:Q8_0"),
+            ),
+            ("fake/32", None),
+            ("ollama/", None),
+            ("", None),
+        ] {
+            assert_eq!(model_from_id(id), want, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn model_from_id_round_trips() {
+        for model in [DEFAULT_MODEL, "bge-m3", "embeddinggemma:300m"] {
+            assert_eq!(
+                model_from_id(&Ollama::new("http://x", model).id()),
+                Some(model)
+            );
+        }
     }
 }

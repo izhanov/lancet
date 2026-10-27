@@ -30,7 +30,10 @@ pub async fn run(g: &Global, args: Args) -> anyhow::Result<()> {
     let store = g.open_store().await?;
     // Text mode works without an embedder (and on a foreign-model
     // database), so only build one when the mode needs vectors.
-    let embedder = (args.mode != Mode::Text).then(|| g.embedder());
+    let embedder = match args.mode {
+        Mode::Text => None,
+        _ => Some(g.embedder(&store).await?),
+    };
 
     let opts = Options {
         mode: args.mode,

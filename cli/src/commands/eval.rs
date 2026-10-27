@@ -25,7 +25,10 @@ pub async fn run(g: &Global, args: Args) -> anyhow::Result<()> {
         args.files
     };
     let store = g.open_store().await?;
-    let embedder = (args.mode != Mode::Text).then(|| g.embedder());
+    let embedder = match args.mode {
+        Mode::Text => None,
+        _ => Some(g.embedder(&store).await?),
+    };
     let opts = Options {
         mode: args.mode,
         limit: args.limit,

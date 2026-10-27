@@ -7,7 +7,7 @@ mod ollama;
 pub(crate) mod recording;
 
 pub use fake::Fake;
-pub use ollama::Ollama;
+pub use ollama::{DEFAULT_MODEL, Ollama, model_from_id};
 
 use crate::Result;
 

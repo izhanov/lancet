@@ -24,11 +24,13 @@ pub struct ReindexArgs {
 pub async fn run(g: &Global, roots: &[PathBuf], reset: bool, force: bool) -> anyhow::Result<()> {
     let start = Instant::now();
     let store = g.open_store().await?;
+    // Before the reset wipes the model the database was built with.
+    let embedder = g.embedder(&store).await?;
     if reset {
         store.reset().await?;
     }
 
-    let indexer = Indexer::new(g.parsers()?, g.embedder());
+    let indexer = Indexer::new(g.parsers()?, embedder);
     let report = |path: &str, chunks: usize| {
         if !g.quiet {
             println!("  {} — {chunks} chunks indexed", pretty_path(path));

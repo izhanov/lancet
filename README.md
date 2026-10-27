@@ -24,7 +24,7 @@ is in your `PATH`. Run it again to update.
 
 | What | Needed for | Install |
 |------|------------|---------|
-| [Ollama](https://ollama.com/download) with the `bge-m3` model | Indexing, `vector` and `hybrid` search (the default): turns text into vectors, locally | `brew install ollama` or the installer from the site, then `ollama pull bge-m3` (~1.2 GB) |
+| [Ollama](https://ollama.com/download) with an embedding model, `nomic-embed-text` by default | Indexing, `vector` and `hybrid` search (the default): turns text into vectors, locally | `brew install ollama` or the installer from the site, then `ollama pull nomic-embed-text` (~274 MB) |
 | Poppler (`pdftotext`) | Indexing PDFs only; other formats do not need it | `brew install poppler` / `apt install poppler-utils` |
 | [Claude Code](https://claude.com/claude-code) | Optional: search from AI agents (MCP server and skill) | — |
 | [GitHub CLI](https://cli.github.com) (`gh`) | Optional: `install.sh` downloads through it when logged in, avoiding the anonymous API rate limit; falls back to `curl` | `brew install gh` |
@@ -32,20 +32,24 @@ is in your `PATH`. Run it again to update.
 Ollama must be running (`ollama serve`, or the desktop app) whenever you
 index or search in `vector` / `hybrid` mode. `--mode text` works without it.
 
-`bge-m3` is multilingual, so Russian and English notes live in one index. A
-different model works too (`--embed-model`), but an index is bound to the
-model that built it: after switching, run `lt reindex <path>`. Many retrieval
-models expect a prompt before a query and before a passage
+`nomic-embed-text` is English. For notes in other languages build the
+database with the multilingual `bge-m3` (~1.2 GB): `ollama pull bge-m3`, then
+`lt --embed-model bge-m3 index ~/notes` (or `LANCET_EMBED_MODEL=bge-m3`). A
+database remembers its model, so later commands need no flag; `--embed-model`
+on a database built with another model is refused, and `lt reindex <path>`
+rebuilds it with the new one. On English code and notes the light models
+searched about as well as `bge-m3` (`docs/parity.md`, step 5);
+`snowflake-arctic-embed:33m` (67 MB) is the smallest that kept up.
+
+Many retrieval models expect a prompt before a query and before a passage
 (`search_query: ` / `search_document: ` for `nomic-embed-text`); `lt` adds
 them for the models listed in `lib/src/embed/models.rs` and embeds any other
-model's texts as they are, with a warning. For English-only code,
-`granite-embedding:30m` (62 MB) or `nomic-embed-text` (274 MB) keep the
-download small.
+model's texts as they are, with a warning.
 
 ## Quick start
 
 ```sh
-ollama pull bge-m3
+ollama pull nomic-embed-text
 lt index ~/notes                      # again later: only changed files are re-embedded
 lt search "how do we deploy to preprod"
 lt search "deploy -staging" --mode text --json
@@ -180,11 +184,12 @@ search is an exact scan (no approximate index), ~0.13 s on 25k chunks.
 A `meta` table keeps key/value pairs, today the embedder.
 
 **A database belongs to one embedding model.** The vector width `N` is
-fixed when the table is created (1024 for `bge-m3`), and the model's id is
-stored in `meta`: vectors of different models are incomparable even when
-their widths match, so `lt` refuses to index into or search a database
-with another model. To switch models, `lt reindex <path>` — it re-embeds
-everything. Everything else in a row is plain data.
+fixed when the table is created (768 for `nomic-embed-text`, 1024 for
+`bge-m3`), and the model's id is stored in `meta`: vectors of different
+models are incomparable even when their widths match, so `lt` refuses to
+index into or search a database with another model, and without
+`--embed-model` it uses the stored one. To switch models,
+`lt --embed-model <model> reindex <path>` — it re-embeds everything. Everything else in a row is plain data.
 
 Inspect a database outside `lt` with any Arrow tool, e.g. in Python:
 `lancedb.connect("~/.local/share/lancet/db.lance").open_table("chunks").to_pandas()`.

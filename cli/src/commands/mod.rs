@@ -13,9 +13,9 @@ use std::sync::Arc;
 
 use clap::{ArgAction, ValueEnum};
 use lancet_lib::config;
-use lancet_lib::embed::{Embedder, Fake, Ollama};
+use lancet_lib::embed::{self, Embedder, Fake, Ollama};
 use lancet_lib::parse::{Code, Registry};
-use lancet_lib::search::squash_whitespace;
+use lancet_lib::search::{META_EMBEDDER_KEY, squash_whitespace};
 use lancet_lib::store::{OpenOptions, Store};
 
 /// Flags accepted by every command, each with a `LANCET_*` env twin.
@@ -44,14 +44,10 @@ pub struct Global {
         default_value = "http://localhost:11434"
     )]
     pub ollama_url: String,
-    /// Ollama embedding model
-    #[arg(
-        long,
-        global = true,
-        env = "LANCET_EMBED_MODEL",
-        default_value = "bge-m3"
-    )]
-    pub embed_model: String,
+    /// Ollama embedding model [default: the one the database was built
+    /// with; nomic-embed-text for a new database]
+    #[arg(long, global = true, env = "LANCET_EMBED_MODEL")]
+    pub embed_model: Option<String>,
     /// Directory with golden-set files for `lt eval`
     #[arg(long, global = true, env = "LANCET_EVALS", default_value_os_t = config::default_evals_dir())]
     pub evals: PathBuf,
@@ -109,12 +105,29 @@ impl Global {
         Ok(registry)
     }
 
-    pub fn embedder(&self) -> Arc<dyn Embedder> {
-        match self.embedder {
-            EmbedderKind::Ollama => Arc::new(Ollama::new(&self.ollama_url, &self.embed_model)),
+    /// The embedder for `store`. Without `--embed-model` a database keeps
+    /// the model it was built with, so changing the default never locks an
+    /// existing database out.
+    pub async fn embedder(&self, store: &Store) -> anyhow::Result<Arc<dyn Embedder>> {
+        Ok(match self.embedder {
+            EmbedderKind::Ollama => {
+                let meta = store.meta().await?;
+                let stored = meta.get(META_EMBEDDER_KEY).map(String::as_str);
+                let model = choose_model(self.embed_model.as_deref(), stored);
+                tracing::debug!(model, "embedding model");
+                Arc::new(Ollama::new(&self.ollama_url, model))
+            }
             EmbedderKind::Fake => Arc::new(Fake { dim: 32 }),
-        }
+        })
     }
+}
+
+/// The asked-for model, else the database's own, else the default.
+fn choose_model<'a>(asked: Option<&'a str>, stored_id: Option<&'a str>) -> &'a str {
+    asked
+        .filter(|m| !m.is_empty())
+        .or_else(|| stored_id.and_then(embed::model_from_id))
+        .unwrap_or(embed::DEFAULT_MODEL)
 }
 
 /// Diagnostics go to stderr; stdout stays clean for the actual output
@@ -172,4 +185,42 @@ pub fn snippet(text: &str, max: usize) -> String {
         return flat;
     }
     flat.chars().take(max).collect::<String>() + "…"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn choose_model_order() {
+        let stored = Some("ollama/bge-m3");
+        assert_eq!(
+            choose_model(Some("mxbai-embed-large"), stored),
+            "mxbai-embed-large"
+        );
+        assert_eq!(
+            choose_model(None, stored),
+            "bge-m3",
+            "a database keeps its model"
+        );
+        assert_eq!(
+            choose_model(None, Some("ollama/nomic-embed-text@30757326")),
+            "nomic-embed-text"
+        );
+        assert_eq!(
+            choose_model(None, None),
+            embed::DEFAULT_MODEL,
+            "a new database"
+        );
+        assert_eq!(
+            choose_model(Some(""), None),
+            embed::DEFAULT_MODEL,
+            "empty env var"
+        );
+        assert_eq!(
+            choose_model(None, Some("fake/32")),
+            embed::DEFAULT_MODEL,
+            "another embedder's database"
+        );
+    }
 }
