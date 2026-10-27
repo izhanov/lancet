@@ -107,7 +107,10 @@ database passes a few hundred thousand chunks or ~100 ms per vector search;
 enriching chunks at index time with an LLM (contextual retrieval) through
 the user's agent CLI (`claude -p`, `codex exec`) or a local model; a
 reference graph from the tags queries' `@reference.*` (`find_references`);
-smaller binaries (LTO; `lt` is ~210 MB); the `lancet-search` skill telling
+smaller binaries beyond the `dist` profile's LTO (`lt` ~125 MB, its tar.gz
+~55 MB: an xz asset would be ~32 MB but install.sh then needs xz on Linux;
+`panic = "abort"` saves ~25 MB of unwind tables and kills the MCP server on
+any panic); the `lancet-search` skill telling
 the agent to restate a question in the code's own terms, in English, before
 searching, or to send both the original and the restated query ("как
 пользователи меняют о себе инфу" misses both profile controllers in
