@@ -150,20 +150,6 @@ impl Indexer {
         Ok(sum)
     }
 
-    /// The full pipeline for one file: parse → embed → store. Returns the
-    /// number of chunks stored. The caller is expected to have checked the
-    /// embedder against the store (see [`check_embedder_meta`]).
-    pub async fn index_file(&self, store: &Store, path: &Path) -> Result<usize> {
-        let doc = self.prepare(path).await?;
-        if doc.chunks.is_empty() {
-            // Nothing to store, but drop stale chunks of a now-empty file.
-            store.delete_by_path(&doc.path).await?;
-            return Ok(0);
-        }
-        store.add_document(&doc).await?;
-        Ok(doc.chunks.len())
-    }
-
     /// Parse → embed: one file ready to store. No chunks for an empty file.
     async fn prepare(&self, path: &Path) -> Result<Document> {
         let key = path_key(path);
@@ -213,7 +199,7 @@ impl Indexer {
     /// build output), anywhere an `.ignore` file is. Overlapping roots
     /// (`notes/` and `notes/a.md`) are deduplicated, so every file is
     /// indexed at most once.
-    pub fn collect_files(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    fn collect_files(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         let mut seen = HashSet::new();
         for root in roots {
@@ -294,7 +280,7 @@ async fn write(store: &Store, batch: Vec<Document>, sum: &mut Summary, opts: &Op
 /// Refuses to mix vectors of different embedders in one database: even with
 /// equal dimensions they are incomparable. A fresh database gets stamped
 /// with the current embedder ID.
-pub async fn check_embedder_meta(store: &Store, embedder_id: &str) -> Result<()> {
+async fn check_embedder_meta(store: &Store, embedder_id: &str) -> Result<()> {
     let mut meta: HashMap<String, String> = store.meta().await?;
     match meta.get(META_EMBEDDER_KEY).map(String::as_str) {
         Some(stored) if stored == embedder_id => Ok(()),
@@ -313,7 +299,7 @@ pub async fn check_embedder_meta(store: &Store, embedder_id: &str) -> Result<()>
 /// the heading trail woven in above the text, so a query mentioning either
 /// still lands on the right vectors. The stored chunk text stays untouched —
 /// this context never shows up in search output.
-pub fn embedding_text(path: &str, chunk: &Chunk) -> String {
+fn embedding_text(path: &str, chunk: &Chunk) -> String {
     let mut parts = vec![path_words(path)];
     if !chunk.section.is_empty() {
         parts.push(chunk.section.clone());

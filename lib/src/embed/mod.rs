@@ -1,7 +1,7 @@
 //! Embedders turn texts into vectors.
 
 mod fake;
-pub mod models;
+mod models;
 mod ollama;
 #[cfg(test)]
 pub(crate) mod recording;
@@ -37,7 +37,7 @@ pub trait Embedder: Send + Sync {
 /// Scales every vector to unit length in place. With unit vectors the L2
 /// distance the store returns maps directly to cosine similarity, no matter
 /// what the model emits.
-pub fn normalize(vectors: &mut [Vec<f32>]) {
+pub(crate) fn normalize(vectors: &mut [Vec<f32>]) {
     for v in vectors {
         let norm = v
             .iter()

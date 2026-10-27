@@ -61,7 +61,7 @@ impl Language {
     /// Loads the plugin in `dir`. Patterns of the tags query that mark no
     /// definition (`@reference.call` and the like) are switched off: they
     /// match nearly every identifier and chunking does not need them.
-    pub fn load(dir: &Path) -> Result<Self> {
+    fn load(dir: &Path) -> Result<Self> {
         let failed = |message: String| Error::Language {
             path: dir.display().to_string(),
             message,
@@ -153,7 +153,7 @@ impl Default for GitHub {
 }
 
 impl GitHub {
-    pub fn with_base(web: &str, raw: &str) -> Self {
+    fn with_base(web: &str, raw: &str) -> Self {
         Self {
             web: web.trim_end_matches('/').to_string(),
             raw: raw.trim_end_matches('/').to_string(),

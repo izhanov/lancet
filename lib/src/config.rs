@@ -5,7 +5,7 @@ use std::path::PathBuf;
 /// The XDG data location, `~/.local/share/lancet`, so an installed binary
 /// finds the same data from any working directory. `$XDG_DATA_HOME` is
 /// honored. `None` when no home directory can be determined.
-pub fn data_dir() -> Option<PathBuf> {
+fn data_dir() -> Option<PathBuf> {
     let base = match std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
         Some(base) => PathBuf::from(base),
         None => std::env::home_dir()?.join(".local").join("share"),

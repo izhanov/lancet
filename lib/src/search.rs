@@ -127,7 +127,7 @@ static EXCLUDE_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)-(\
 /// Splits minus-operators out of a query: -word and -"some phrase" become
 /// exclusion terms, the rest stays the query. A hyphen inside a word
 /// (re-index, state-of-the-art) is not an operator.
-pub fn parse_exclusions(query: &str) -> (String, Vec<String>) {
+fn parse_exclusions(query: &str) -> (String, Vec<String>) {
     let mut exclude = Vec::new();
     let mut strip = |re: &Regex, q: &str| {
         re.replace_all(q, |caps: &regex::Captures| {

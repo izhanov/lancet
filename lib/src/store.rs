@@ -108,7 +108,7 @@ impl Store {
     /// Writes all chunks of one file in a single commit, replacing whatever
     /// was stored for the same path: re-indexing never duplicates, and
     /// chunks that disappeared from the file are removed.
-    pub async fn add_document(&self, doc: &Document) -> Result<()> {
+    pub(crate) async fn add_document(&self, doc: &Document) -> Result<()> {
         self.add_documents(std::slice::from_ref(doc)).await
     }
 
@@ -116,7 +116,7 @@ impl Store {
     /// is a new table version with files of its own, and its cost grows
     /// with the number of versions: a commit per file made indexing a code
     /// repository take minutes of mostly filesystem work.
-    pub async fn add_documents(&self, docs: &[Document]) -> Result<()> {
+    pub(crate) async fn add_documents(&self, docs: &[Document]) -> Result<()> {
         let docs: Vec<&Document> = docs.iter().filter(|d| !d.chunks.is_empty()).collect();
         let Some(first) = docs.first() else {
             return Ok(());
@@ -155,7 +155,7 @@ impl Store {
         ensure_fts_index(&table).await
     }
 
-    pub async fn delete_by_path(&self, path: &str) -> Result<()> {
+    pub(crate) async fn delete_by_path(&self, path: &str) -> Result<()> {
         let _write = self.writes.lock().await;
         if let Some(table) = self.chunks().await? {
             table.delete(&path_filter(path)).await?;
@@ -198,7 +198,7 @@ impl Store {
 
     /// The `limit` nearest chunks to a unit-normalized query vector, best
     /// first. `filter` is an SQL predicate applied before the search.
-    pub async fn search_vector(
+    pub(crate) async fn search_vector(
         &self,
         vector: &[f32],
         limit: usize,
@@ -223,7 +223,7 @@ impl Store {
     }
 
     /// BM25 full-text search over chunk text, best first.
-    pub async fn search_text(
+    pub(crate) async fn search_text(
         &self,
         query: &str,
         limit: usize,
@@ -252,7 +252,7 @@ impl Store {
 
     /// Vector and full-text search fused with Reciprocal Rank Fusion:
     /// agreement between the two beats a high position in either alone.
-    pub async fn search_hybrid(
+    pub(crate) async fn search_hybrid(
         &self,
         vector: &[f32],
         query: &str,
@@ -304,7 +304,7 @@ impl Store {
     }
 
     /// Replaces the whole metadata map in one commit.
-    pub async fn set_meta(&self, meta: &HashMap<String, String>) -> Result<()> {
+    pub(crate) async fn set_meta(&self, meta: &HashMap<String, String>) -> Result<()> {
         let _write = self.writes.lock().await;
         let schema = Arc::new(Schema::new(vec![
             Field::new("key", DataType::Utf8, false),
@@ -361,7 +361,7 @@ impl Store {
     /// Compacts small fragments, prunes old versions and folds unindexed
     /// rows into the indices. Searches stay correct without it (unindexed
     /// rows are scanned), only slower; run it after a batch of writes.
-    pub async fn optimize(&self) -> Result<()> {
+    pub(crate) async fn optimize(&self) -> Result<()> {
         let _write = self.writes.lock().await;
         if let Some(table) = self.chunks().await? {
             table.optimize(OptimizeAction::All).await?;
