@@ -1,6 +1,7 @@
 //! Embedders turn texts into vectors.
 
 mod fake;
+pub mod models;
 mod ollama;
 #[cfg(test)]
 pub(crate) mod recording;

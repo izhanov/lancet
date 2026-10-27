@@ -172,7 +172,46 @@ async fn batches() {
     );
 }
 
+#[tokio::test]
+async fn prompts_by_input_type() {
+    let (server, mut o) = fake_ollama(|req| {
+        let n = input(req).len();
+        ResponseTemplate::new(200).set_body_json(json!({ "embeddings": vec![[0.1]; n] }))
+    })
+    .await;
+    o.profile = models::profile("nomic-embed-text");
+
+    o.embed(&texts(&["deploy"]), InputType::Query)
+        .await
+        .unwrap();
+    o.embed(&texts(&["fn deploy()"]), InputType::Document)
+        .await
+        .unwrap();
+
+    let sent: Vec<Vec<String>> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .map(input)
+        .collect();
+    assert_eq!(
+        sent,
+        [["search_query: deploy"], ["search_document: fn deploy()"]]
+    );
+}
+
 #[test]
 fn id() {
     assert_eq!(Ollama::new("http://x", "bge-m3").id(), "ollama/bge-m3");
+    assert_eq!(
+        Ollama::new("http://x", "hf.co/x/bge-m3-GGUF:Q8_0").id(),
+        "ollama/hf.co/x/bge-m3-GGUF:Q8_0",
+        "no profile: bare id"
+    );
+    let fingerprint = models::profile("nomic-embed-text").unwrap().fingerprint();
+    assert_eq!(
+        Ollama::new("http://x", "nomic-embed-text:v1.5").id(),
+        format!("ollama/nomic-embed-text:v1.5@{fingerprint}")
+    );
 }
