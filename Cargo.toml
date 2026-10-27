@@ -14,6 +14,15 @@ license = "MIT"
 [profile.release]
 strip = true
 
+# Release assets only (see .github/workflows/release.yml): lt shrinks from
+# ~210 to ~125 MB, its tar.gz from ~80 to ~55 MB. A clean build takes
+# ~15 min on an M5 and every change relinks the whole binary, so local
+# `--release` builds stay without it.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
 [workspace.dependencies]
 lancet-lib = { path = "lib" }
 
